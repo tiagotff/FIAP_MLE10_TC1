@@ -99,7 +99,7 @@ class BatchChurnPredictionResponse(BaseModel):
 
 
 class ModelInfo(BaseModel):
-    """Resumo das métricas e metadados do modelo carregado, exposto via /health."""
+    """Resumo das métricas e metadados do modelo carregado."""
 
     model_version: str
     trained_at: str | None = None
@@ -109,14 +109,43 @@ class ModelInfo(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Resposta do endpoint de health check."""
+    """Resposta do endpoint `/health` (liveness probe).
 
-    status: Literal["ok", "degraded"]
+    Responde se o *processo da API* está vivo — não verifica o modelo.
+    Um orquestrador (ex.: Kubernetes) usa isso para decidir se deve
+    reiniciar o container. Deve ser rápido e quase nunca falhar.
+    """
+
+    status: Literal["ok"] = "ok"
+
+
+class ReadyResponse(BaseModel):
+    """Resposta do endpoint `/ready` (readiness probe).
+
+    Responde se a API está *pronta para receber tráfego* — neste caso,
+    se o modelo e o pipeline de pré-processamento foram carregados com
+    sucesso. Um load balancer usa isso para decidir se deve rotear
+    requisições para esta instância. Diferente de `/health`: o processo
+    pode estar vivo (`/health` = ok) mas ainda não pronto (`/ready` = not_ready),
+    por exemplo durante o carregamento inicial do modelo.
+    """
+
+    status: Literal["ready", "not_ready"]
     model_loaded: bool
-    model_version: str | None = None
-    model_info: ModelInfo | None = Field(
-        default=None, description="Métricas resumidas do modelo, quando disponíveis"
-    )
+
+
+class MetadataResponse(BaseModel):
+    """Resposta do endpoint `/metadata`.
+
+    Descreve o modelo em produção (versão, métricas, arquitetura) e o
+    contrato de entrada/saída esperado pelo `/infer` — útil para um
+    cliente da API (humano ou sistema) descobrir programaticamente como
+    montar uma requisição válida, sem precisar ler a documentação.
+    """
+
+    model_info: ModelInfo
+    input_schema: dict = Field(description="JSON Schema dos campos aceitos por /infer")
+    output_schema: dict = Field(description="JSON Schema da resposta de /infer")
 
 
 class RootResponse(BaseModel):
@@ -126,4 +155,7 @@ class RootResponse(BaseModel):
     version: str
     docs_url: str
     health_url: str
-    predict_url: str
+    ready_url: str
+    metadata_url: str
+    metrics_url: str
+    infer_url: str

@@ -1,19 +1,29 @@
 """API de inferência do modelo de previsão de churn.
 
-Endpoints:
-- `GET /`: informações básicas da API (nome, versão, links úteis).
-- `GET /health`: verifica se a API está no ar, se o modelo foi carregado
-  com sucesso, e expõe um resumo das métricas do modelo (liveness/readiness
-  probe + observabilidade de modelo em produção).
-- `POST /predict`: recebe os dados de um cliente e retorna a probabilidade
-  de churn, a predição binária e o nível de risco.
-- `POST /predict/batch`: mesma predição, para até 500 clientes por chamada.
+Endpoints, seguindo a convenção de plataformas de model serving em produção
+(KServe, Seldon, BentoML, MLflow Serving):
 
-Inclui middleware de latência (mede e loga o tempo de cada requisição),
-CORS habilitado (para consumo a partir de um frontend/browser) e logging
-estruturado em todas as rotas (sem uso de `print()`). Qualquer exceção não
-tratada é capturada por um handler genérico, que nunca expõe detalhes
-internos (stack trace, mensagem de exceção) ao cliente da API.
+- `GET /health`: **liveness** — o processo da API está vivo? Não depende do
+  modelo estar carregado; usado por um orquestrador (ex.: Kubernetes) para
+  decidir se deve reiniciar o container.
+- `GET /ready`: **readiness** — a API está pronta para receber tráfego?
+  Verifica se o modelo e o pipeline foram carregados; usado por um load
+  balancer para decidir se deve rotear requisições para esta instância.
+- `POST /infer`: realiza a predição de churn para um cliente (nome canônico
+  de inferência). `POST /predict` e `POST /predict/batch` continuam
+  disponíveis como aliases, por compatibilidade com integrações existentes.
+- `GET /metadata`: descreve o modelo em produção (versão, métricas) e o
+  contrato de entrada/saída esperado por `/infer`.
+- `GET /metrics`: métricas operacionais da API (contagem de requisições,
+  latência, predições por nível de risco) no formato texto do Prometheus.
+- `GET /`: informações básicas e links para os demais endpoints.
+
+Inclui middleware de latência + métricas Prometheus (mede e registra o
+tempo de cada requisição), CORS habilitado (para consumo a partir de um
+frontend/browser) e logging estruturado em todas as rotas (sem uso de
+`print()`). Qualquer exceção não tratada é capturada por um handler
+genérico, que nunca expõe detalhes internos (stack trace, mensagem de
+exceção) ao cliente da API.
 """
 
 from __future__ import annotations
@@ -22,18 +32,21 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from churn_prediction.inference import ModelNotLoadedError, predictor
 from churn_prediction.logging_config import get_logger
+from churn_prediction.metrics import observe_prediction, observe_request, render_latest_metrics
 from churn_prediction.schemas import (
     BatchChurnPredictionRequest,
     BatchChurnPredictionResponse,
     ChurnPredictionRequest,
     ChurnPredictionResponse,
     HealthResponse,
+    MetadataResponse,
+    ReadyResponse,
     RootResponse,
 )
 
@@ -49,8 +62,9 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - assinatura exigida pelo Fast
     try:
         predictor.load()
     except FileNotFoundError as exc:
-        # A API ainda sobe (permite que /health reporte o problema), mas
-        # qualquer chamada a /predict falhará até o modelo ser treinado.
+        # A API ainda sobe (permite que /health responda e /ready reporte o
+        # problema), mas qualquer chamada a /infer falhará até o modelo ser
+        # treinado.
         logger.error("Falha ao carregar o modelo na inicialização", extra={"error": str(exc)})
     yield
     logger.info("Encerrando API de inferência de churn")
@@ -78,7 +92,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def latency_logging_middleware(request: Request, call_next):
-    """Mede a latência de cada requisição e a registra em log estruturado.
+    """Mede a latência de cada requisição, registrando-a em log estruturado
+    e nas métricas Prometheus (`/metrics`).
 
     Também atribui um `request_id` único por requisição, propagado no log
     e no header de resposta — facilita rastrear uma requisição específica
@@ -89,9 +104,19 @@ async def latency_logging_middleware(request: Request, call_next):
 
     response = await call_next(request)
 
-    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    elapsed_seconds = time.perf_counter() - start_time
+    elapsed_ms = elapsed_seconds * 1000
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.2f}"
+
+    # request.url.path, e não a rota com path params resolvida, é
+    # suficiente aqui pois esta API não tem rotas parametrizadas.
+    observe_request(
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        latency_seconds=elapsed_seconds,
+    )
 
     logger.info(
         "Requisição processada",
@@ -141,39 +166,111 @@ async def root() -> RootResponse:
         version=API_VERSION,
         docs_url="/docs",
         health_url="/health",
-        predict_url="/predict",
+        ready_url="/ready",
+        metadata_url="/metadata",
+        metrics_url="/metrics",
+        infer_url="/infer",
     )
 
 
 @app.get("/health", response_model=HealthResponse, tags=["observability"])
 async def health() -> HealthResponse:
-    """Verifica a saúde da API e se o modelo está carregado e pronto para uso.
+    """Liveness probe: confirma que o processo da API está respondendo.
 
-    Quando o modelo está carregado, inclui também um resumo de suas
-    métricas (AUC-ROC, recall, custo de negócio no holdout de teste),
-    útil para verificação rápida de qual versão/qualidade de modelo está
-    em produção sem precisar consultar o MLflow.
+    Não verifica o modelo — propositalmente simples e rápido, para que um
+    orquestrador não reinicie o container por um problema no modelo (que é
+    responsabilidade do `/ready`, não do `/health`).
+    """
+    return HealthResponse()
+
+
+@app.get("/ready", response_model=ReadyResponse, tags=["observability"])
+async def ready() -> ReadyResponse:
+    """Readiness probe: confirma que o modelo e o pipeline estão carregados
+    e a API está pronta para receber tráfego de inferência.
+
+    Diferente de `/health`: a API pode estar viva (`/health` = ok) mas
+    ainda não pronta (`/ready` = not_ready), por exemplo durante o
+    carregamento inicial do modelo ou se o treino nunca foi executado.
     """
     if predictor.is_loaded:
-        return HealthResponse(
-            status="ok",
-            model_loaded=True,
-            model_version=predictor.model_version,
-            model_info=predictor.get_model_info(),
-        )
-    return HealthResponse(status="degraded", model_loaded=False, model_version=None, model_info=None)
+        return ReadyResponse(status="ready", model_loaded=True)
+    return ReadyResponse(status="not_ready", model_loaded=False)
 
 
-@app.post("/predict", response_model=ChurnPredictionResponse, tags=["inference"])
-async def predict(payload: ChurnPredictionRequest) -> ChurnPredictionResponse:
-    """Recebe os dados de um cliente e retorna a predição de risco de churn."""
+@app.get("/metadata", response_model=MetadataResponse, tags=["observability"])
+async def metadata() -> MetadataResponse:
+    """Descreve o modelo em produção e o contrato de entrada/saída de `/infer`.
+
+    Útil para um cliente (humano ou sistema) descobrir programaticamente
+    como montar uma requisição válida e quais métricas o modelo atual tem,
+    sem precisar consultar o MLflow ou ler a documentação manualmente.
+    """
     if not predictor.is_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Modelo indisponível. Verifique se o treino foi executado ('make train').",
         )
 
-    return predictor.predict(payload)
+    model_info = predictor.get_model_info()
+    if model_info is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metadados do modelo indisponíveis.",
+        )
+
+    return MetadataResponse(
+        model_info=model_info,
+        input_schema=ChurnPredictionRequest.model_json_schema(),
+        output_schema=ChurnPredictionResponse.model_json_schema(),
+    )
+
+
+@app.get("/metrics", tags=["observability"])
+async def metrics() -> Response:
+    """Métricas operacionais da API (requisições, latência, predições por
+    risco) no formato texto do Prometheus, para scraping por um servidor
+    Prometheus ou visualização em um dashboard Grafana.
+    """
+    body, content_type = render_latest_metrics()
+    return Response(content=body, media_type=content_type)
+
+
+def _predict_and_track(payload: ChurnPredictionRequest) -> ChurnPredictionResponse:
+    """Executa a predição e registra o nível de risco resultante nas métricas."""
+    result = predictor.predict(payload)
+    observe_prediction(result.risk_level)
+    return result
+
+
+@app.post("/infer", response_model=ChurnPredictionResponse, tags=["inference"])
+async def infer(payload: ChurnPredictionRequest) -> ChurnPredictionResponse:
+    """Recebe os dados de um cliente e retorna a predição de risco de churn.
+
+    Nome canônico do endpoint de inferência (`POST /infer`, alinhado à
+    convenção de plataformas de model serving). Veja também `POST /predict`,
+    mantido como alias.
+    """
+    if not predictor.is_loaded:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Modelo indisponível. Verifique se o treino foi executado ('make train').",
+        )
+
+    return _predict_and_track(payload)
+
+
+@app.post(
+    "/predict",
+    response_model=ChurnPredictionResponse,
+    tags=["inference"],
+    summary="Alias de /infer (mantido por compatibilidade)",
+)
+async def predict(payload: ChurnPredictionRequest) -> ChurnPredictionResponse:
+    """Alias de `POST /infer`. Mantido para não quebrar integrações
+    existentes que já usam o nome `/predict`.
+    """
+    return await infer(payload)
 
 
 @app.post("/predict/batch", response_model=BatchChurnPredictionResponse, tags=["inference"])
@@ -190,4 +287,7 @@ async def predict_batch(payload: BatchChurnPredictionRequest) -> BatchChurnPredi
         )
 
     predictions = predictor.predict_batch(payload.customers)
+    for prediction in predictions:
+        observe_prediction(prediction.risk_level)
+
     return BatchChurnPredictionResponse(predictions=predictions, count=len(predictions))

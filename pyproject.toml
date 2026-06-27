@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
     "pandera>=0.19",
+    "prometheus-client>=0.20",
     "matplotlib>=3.8",
     "seaborn>=0.13",
     "scipy>=1.12",
