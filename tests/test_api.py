@@ -1,8 +1,9 @@
 """Testes da API de inferência (FastAPI), usando TestClient (httpx).
 
-Cobrem os contratos dos endpoints `/health` e `/predict`: códigos de status,
-formato da resposta, validação Pydantic de entrada e o header de latência
-inserido pelo middleware.
+Cobrem os contratos dos endpoints `/`, `/health`, `/predict` e
+`/predict/batch`: códigos de status, formato da resposta, validação
+Pydantic de entrada, headers de latência e CORS, e o tratamento de erro
+genérico (que nunca deve expor detalhes internos ao cliente).
 """
 
 from __future__ import annotations
@@ -34,9 +35,23 @@ def _skip_if_model_unavailable():
         pytest.skip("Artefatos do modelo não encontrados — execute 'make train' antes.")
 
 
+def test_root_endpoint_returns_api_info(client):
+    """GET / deve retornar informações básicas da API, evitando um 404
+    "vazio" na rota raiz.
+    """
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Churn Prediction API"
+    assert body["docs_url"] == "/docs"
+    assert body["predict_url"] == "/predict"
+
+
 def test_health_endpoint_returns_ok_when_model_loaded(client):
-    """GET /health deve retornar 200 e reportar o modelo como carregado,
-    assumindo que os artefatos já foram treinados.
+    """GET /health deve retornar 200, reportar o modelo como carregado e
+    incluir um resumo das métricas do modelo (model_info), assumindo que
+    os artefatos já foram treinados.
     """
     response = client.get("/health")
 
@@ -45,6 +60,8 @@ def test_health_endpoint_returns_ok_when_model_loaded(client):
     assert body["status"] == "ok"
     assert body["model_loaded"] is True
     assert body["model_version"] is not None
+    assert body["model_info"] is not None
+    assert 0.0 <= body["model_info"]["test_roc_auc"] <= 1.0
 
 
 def test_predict_endpoint_returns_valid_response(client, valid_prediction_payload):
@@ -119,3 +136,85 @@ def test_predict_low_risk_profile_returns_low_probability(client, valid_predicti
     low_risk_response = client.post("/predict", json=low_risk_payload).json()
 
     assert low_risk_response["churn_probability"] < high_risk_response["churn_probability"]
+
+
+def test_predict_batch_endpoint_returns_one_prediction_per_customer(client, valid_prediction_payload):
+    """POST /predict/batch deve retornar uma predição para cada cliente do
+    lote, na mesma ordem em que foram enviados.
+    """
+    response = client.post(
+        "/predict/batch", json={"customers": [valid_prediction_payload, valid_prediction_payload]}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 2
+    assert len(body["predictions"]) == 2
+    # Mesmo payload enviado duas vezes deve produzir a mesma predição.
+    assert body["predictions"][0]["churn_probability"] == body["predictions"][1]["churn_probability"]
+
+
+def test_predict_batch_endpoint_rejects_empty_list(client):
+    """POST /predict/batch com uma lista vazia de clientes deve ser
+    rejeitado com HTTP 422 (min_length=1 no schema).
+    """
+    response = client.post("/predict/batch", json={"customers": []})
+
+    assert response.status_code == 422
+
+
+def test_predict_batch_endpoint_rejects_batch_above_limit(client, valid_prediction_payload):
+    """POST /predict/batch com mais de 500 clientes deve ser rejeitado com
+    HTTP 422, antes de qualquer processamento pelo modelo.
+    """
+    oversized_batch = {"customers": [valid_prediction_payload] * 501}
+
+    response = client.post("/predict/batch", json=oversized_batch)
+
+    assert response.status_code == 422
+
+
+def test_cors_headers_present_on_preflight_request(client):
+    """Uma requisição CORS preflight (OPTIONS) deve receber os headers
+    Access-Control-* que habilitam consumo da API a partir de um navegador.
+    """
+    response = client.options(
+        "/predict",
+        headers={
+            "Origin": "http://example.com",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.headers.get("access-control-allow-origin") == "http://example.com"
+    assert "POST" in response.headers.get("access-control-allow-methods", "")
+
+
+def test_unhandled_exception_returns_generic_500_without_internal_details(valid_prediction_payload):
+    """Uma exceção inesperada na camada de inferência deve resultar em HTTP
+    500 com uma mensagem genérica — nenhum detalhe interno (tipo da
+    exceção, mensagem original, stack trace) deve ser exposto ao cliente.
+
+    Usa raise_server_exceptions=False neste teste específico: por padrão o
+    TestClient re-levanta exceções não tratadas (útil para debugar testes),
+    mas aqui queremos validar o comportamento real de produção, em que o
+    exception_handler genérico converte a exceção em uma resposta HTTP 500.
+    """
+    from churn_prediction.inference import predictor
+
+    original_predict = predictor.predict
+
+    def _broken_predict(_payload):
+        raise ValueError("detalhe interno sensível que não deve aparecer na resposta")
+
+    predictor.predict = _broken_predict
+    try:
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            response = test_client.post("/predict", json=valid_prediction_payload)
+    finally:
+        predictor.predict = original_predict
+
+    assert response.status_code == 500
+    body = response.json()
+    assert "sensível" not in body["detail"]
+    assert "ValueError" not in body["detail"]
