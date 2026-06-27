@@ -1,9 +1,10 @@
 """Testes da API de inferência (FastAPI), usando TestClient (httpx).
 
-Cobrem os contratos dos endpoints `/`, `/health`, `/predict` e
-`/predict/batch`: códigos de status, formato da resposta, validação
-Pydantic de entrada, headers de latência e CORS, e o tratamento de erro
-genérico (que nunca deve expor detalhes internos ao cliente).
+Cobrem os contratos de todos os endpoints — `/`, `/health`, `/ready`,
+`/metadata`, `/metrics`, `/infer`, `/predict` (alias) e `/predict/batch`:
+códigos de status, formato da resposta, validação Pydantic de entrada,
+headers de latência, CORS e o tratamento de erro genérico (que nunca deve
+expor detalhes internos ao cliente).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ def _skip_if_model_unavailable():
 
 def test_root_endpoint_returns_api_info(client):
     """GET / deve retornar informações básicas da API, evitando um 404
-    "vazio" na rota raiz.
+    "vazio" na rota raiz, com links para todos os endpoints canônicos.
     """
     response = client.get("/")
 
@@ -45,23 +46,90 @@ def test_root_endpoint_returns_api_info(client):
     body = response.json()
     assert body["name"] == "Churn Prediction API"
     assert body["docs_url"] == "/docs"
-    assert body["predict_url"] == "/predict"
+    assert body["infer_url"] == "/infer"
+    assert body["ready_url"] == "/ready"
+    assert body["metadata_url"] == "/metadata"
+    assert body["metrics_url"] == "/metrics"
 
 
-def test_health_endpoint_returns_ok_when_model_loaded(client):
-    """GET /health deve retornar 200, reportar o modelo como carregado e
-    incluir um resumo das métricas do modelo (model_info), assumindo que
-    os artefatos já foram treinados.
+def test_health_endpoint_is_simple_liveness_check(client):
+    """GET /health é uma liveness probe simples — não depende do modelo
+    estar carregado, apenas confirma que o processo da API está respondendo.
     """
     response = client.get("/health")
 
     assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_ready_endpoint_reports_model_loaded(client):
+    """GET /ready deve reportar 'ready' e model_loaded=True quando o modelo
+    e o pipeline foram carregados com sucesso (pré-requisito: 'make train'
+    já executado — garantido pela fixture _skip_if_model_unavailable).
+    """
+    response = client.get("/ready")
+
+    assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "ok"
+    assert body["status"] == "ready"
     assert body["model_loaded"] is True
-    assert body["model_version"] is not None
-    assert body["model_info"] is not None
+
+
+def test_metadata_endpoint_returns_model_info_and_schemas(client):
+    """GET /metadata deve expor as métricas do modelo e os JSON Schemas de
+    entrada/saída esperados por /infer — permitindo que um cliente
+    descubra programaticamente o contrato da API.
+    """
+    response = client.get("/metadata")
+
+    assert response.status_code == 200
+    body = response.json()
     assert 0.0 <= body["model_info"]["test_roc_auc"] <= 1.0
+    assert "properties" in body["input_schema"]
+    assert "gender" in body["input_schema"]["properties"]
+    assert "properties" in body["output_schema"]
+
+
+def test_metrics_endpoint_returns_prometheus_format(client):
+    """GET /metrics deve retornar métricas no formato texto do Prometheus,
+    incluindo os contadores customizados desta API depois de pelo menos
+    uma requisição ter sido processada.
+    """
+    client.get("/health")  # garante que existe ao menos uma métrica registrada
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    body = response.text
+    assert "churn_api_requests_total" in body
+    assert "churn_api_request_latency_seconds" in body
+
+
+def test_infer_endpoint_returns_valid_response(client, valid_prediction_payload):
+    """POST /infer, com um payload válido, deve retornar 200 e um corpo
+    de resposta que respeita o schema ChurnPredictionResponse — este é o
+    endpoint canônico de inferência.
+    """
+    response = client.post("/infer", json=valid_prediction_payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert 0.0 <= body["churn_probability"] <= 1.0
+    assert isinstance(body["churn_prediction"], bool)
+    assert body["risk_level"] in {"low", "medium", "high"}
+    assert "model_version" in body
+
+
+def test_predict_alias_returns_same_result_as_infer(client, valid_prediction_payload):
+    """POST /predict deve ser um alias funcionalmente idêntico a /infer,
+    preservado por compatibilidade com integrações existentes.
+    """
+    infer_response = client.post("/infer", json=valid_prediction_payload).json()
+    predict_response = client.post("/predict", json=valid_prediction_payload).json()
+
+    assert infer_response["churn_probability"] == predict_response["churn_probability"]
+    assert infer_response["risk_level"] == predict_response["risk_level"]
 
 
 def test_predict_endpoint_returns_valid_response(client, valid_prediction_payload):
@@ -194,6 +262,9 @@ def test_unhandled_exception_returns_generic_500_without_internal_details(valid_
     """Uma exceção inesperada na camada de inferência deve resultar em HTTP
     500 com uma mensagem genérica — nenhum detalhe interno (tipo da
     exceção, mensagem original, stack trace) deve ser exposto ao cliente.
+
+    Testado via /predict, mas o handler genérico vale para qualquer rota
+    (incluindo /infer, que internamente chama a mesma lógica de predição).
 
     Usa raise_server_exceptions=False neste teste específico: por padrão o
     TestClient re-levanta exceções não tratadas (útil para debugar testes),
