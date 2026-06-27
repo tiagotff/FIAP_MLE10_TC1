@@ -16,7 +16,11 @@ import torch
 from churn_prediction.config import MODELS_DIR
 from churn_prediction.logging_config import get_logger
 from churn_prediction.mlp_model import ChurnMLP, predict_proba
-from churn_prediction.schemas import ChurnPredictionRequest, ChurnPredictionResponse
+from churn_prediction.schemas import (
+    ChurnPredictionRequest,
+    ChurnPredictionResponse,
+    ModelInfo,
+)
 
 logger = get_logger(__name__)
 
@@ -25,6 +29,7 @@ MODEL_PATH = MODELS_DIR / "mlp_model.pt"
 METADATA_PATH = MODELS_DIR / "model_metadata.json"
 
 RISK_THRESHOLDS = {"low": 0.3, "medium": 0.6}  # >= medium e < high vira "medium"; >= 0.6 vira "high"
+MAX_BATCH_SIZE = 500
 
 
 class ModelNotLoadedError(RuntimeError):
@@ -87,6 +92,26 @@ class ChurnPredictor:
             return self.metadata.get("model_version", "unknown")
         return "unknown"
 
+    def get_model_info(self) -> ModelInfo | None:
+        """Resumo das métricas do modelo, usado pelo endpoint /health.
+
+        Retorna None se os metadados não puderam ser carregados (ex.:
+        modelo treinado antes do model_metadata.json existir).
+        """
+        if self.metadata is None:
+            return None
+
+        test_metrics = self.metadata.get("test_metrics", {})
+        business_metrics = self.metadata.get("business_metrics", {})
+
+        return ModelInfo(
+            model_version=self.model_version,
+            trained_at=self.metadata.get("trained_at"),
+            test_roc_auc=test_metrics.get("roc_auc"),
+            test_recall=test_metrics.get("recall"),
+            business_net_cost=business_metrics.get("net_cost"),
+        )
+
     @staticmethod
     def _risk_level(probability: float) -> str:
         if probability < RISK_THRESHOLDS["low"]:
@@ -95,25 +120,35 @@ class ChurnPredictor:
             return "medium"
         return "high"
 
+    def _build_response(self, probability: float) -> ChurnPredictionResponse:
+        return ChurnPredictionResponse(
+            churn_probability=round(probability, 4),
+            churn_prediction=probability >= 0.5,
+            risk_level=self._risk_level(probability),
+            model_version=self.model_version,
+        )
+
     def predict(self, request: ChurnPredictionRequest) -> ChurnPredictionResponse:
         """Gera uma predição de churn para um único cliente."""
+        return self.predict_batch([request])[0]
+
+    def predict_batch(self, requests: list[ChurnPredictionRequest]) -> list[ChurnPredictionResponse]:
+        """Gera predições para um lote de clientes em uma única passada pelo modelo.
+
+        Vetorizar o lote (em vez de chamar `predict()` em loop) evita
+        reprocessar o pipeline e o forward da MLP individualmente — mais
+        eficiente para o endpoint `/predict/batch`.
+        """
         if not self.is_loaded:
             raise ModelNotLoadedError(
                 "O modelo ainda não foi carregado. Chame .load() antes de prever."
             )
 
-        input_df = pd.DataFrame([request.model_dump()])
+        input_df = pd.DataFrame([r.model_dump() for r in requests])
         X_processed = self.preprocessor.transform(input_df)
+        probabilities = predict_proba(self.model, X_processed)
 
-        probability = float(predict_proba(self.model, X_processed)[0])
-        prediction = probability >= 0.5
-
-        return ChurnPredictionResponse(
-            churn_probability=round(probability, 4),
-            churn_prediction=prediction,
-            risk_level=self._risk_level(probability),
-            model_version=self.model_version,
-        )
+        return [self._build_response(float(p)) for p in probabilities]
 
 
 # Instância única (singleton) reutilizada por toda a aplicação FastAPI.

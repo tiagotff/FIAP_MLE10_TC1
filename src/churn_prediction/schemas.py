@@ -76,9 +76,54 @@ class ChurnPredictionResponse(BaseModel):
     model_version: str = Field(description="Versão do modelo que gerou esta predição")
 
 
+class BatchChurnPredictionRequest(BaseModel):
+    """Lote de clientes para predição em uma única chamada.
+
+    Útil para o time de Retenção/CRM pontuar uma carteira de clientes de
+    uma vez (ex.: rotina batch diária), em vez de uma chamada HTTP por
+    cliente.
+    """
+
+    customers: list[ChurnPredictionRequest] = Field(
+        min_length=1,
+        max_length=500,
+        description="Lista de clientes a serem avaliados (máximo 500 por requisição)",
+    )
+
+
+class BatchChurnPredictionResponse(BaseModel):
+    """Resultado da predição em lote."""
+
+    predictions: list[ChurnPredictionResponse]
+    count: int = Field(description="Número de clientes avaliados nesta resposta")
+
+
+class ModelInfo(BaseModel):
+    """Resumo das métricas e metadados do modelo carregado, exposto via /health."""
+
+    model_version: str
+    trained_at: str | None = None
+    test_roc_auc: float | None = None
+    test_recall: float | None = None
+    business_net_cost: float | None = None
+
+
 class HealthResponse(BaseModel):
     """Resposta do endpoint de health check."""
 
     status: Literal["ok", "degraded"]
     model_loaded: bool
     model_version: str | None = None
+    model_info: ModelInfo | None = Field(
+        default=None, description="Métricas resumidas do modelo, quando disponíveis"
+    )
+
+
+class RootResponse(BaseModel):
+    """Resposta do endpoint raiz (/), com informações básicas da API."""
+
+    name: str
+    version: str
+    docs_url: str
+    health_url: str
+    predict_url: str
