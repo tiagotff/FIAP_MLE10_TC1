@@ -102,13 +102,13 @@ cd FIAP_MLE10_TC1
 
 # 2. Criar o ambiente virtual com uma versão suportada (ex.: 3.12)
 python3.12 -m venv .venv          # Linux/macOS
-# py -3.12 -m venv .venv          # Windows
+py -3.12 -m venv .venv            # Windows
 
 # 3. Ativar o ambiente virtual
 source .venv/bin/activate         # Linux/macOS
-# source .venv/Scripts/activate   # Windows (Git Bash)
-# .venv\Scripts\activate.bat      # Windows (cmd)
-# .venv\Scripts\Activate.ps1      # Windows (PowerShell)
+source .venv/Scripts/activate     # Windows (Git Bash)
+.venv\Scripts\activate.bat        # Windows (cmd)
+.venv\Scripts\Activate.ps1        # Windows (PowerShell)
 
 # 4. Instalar o projeto e suas dependências (modo editável, com extras de dev)
 pip install -e ".[dev]"
@@ -284,6 +284,6 @@ Detalhes completos do framework de custo: ver [`docs/ml_canvas.md`](docs/ml_canv
 
 ## Equipe
 
-Grupo Tech Challenge 1 — FIAP MLE10.
+Tech Challenge 1 — FIAP MLE10 - Machine Learning Engineering
 
-Dúvidas? Procure o grupo no Discord do curso.
+By Tiago de Freitas Faustino
