@@ -76,7 +76,8 @@ reprodutibilidade, testes e documentação.
 │       ├── schemas.py          # Schemas Pydantic (request/response da API)
 │       ├── inference.py        # Carrega artefatos e executa predições
 │       ├── logging_config.py   # Logging estruturado (JSON), sem print()
-│       └── api.py              # API FastAPI (/, /health, /predict, /predict/batch)
+│       ├── metrics.py          # Métricas operacionais (Prometheus) para /metrics
+│       └── api.py              # API FastAPI (/, /health, /ready, /infer, /metadata, /metrics)
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # Fixtures compartilhadas
@@ -379,41 +380,96 @@ endpoints abaixo direto no navegador, sem precisar de `curl`.
 
 ### Endpoints
 
+A API segue a convenção adotada por plataformas de model serving em
+produção (KServe, Seldon, BentoML, MLflow Serving): endpoints distintos
+para liveness, readiness, inferência, metadados e métricas operacionais.
+
+| Endpoint | Método | Propósito |
+|---|---|---|
+| `/` | GET | Informações básicas e links para os demais endpoints |
+| `/health` | GET | **Liveness** — o processo está vivo? (não depende do modelo) |
+| `/ready` | GET | **Readiness** — o modelo está carregado e pronto para inferência? |
+| `/infer` | POST | Predição de churn para **um** cliente (nome canônico) |
+| `/predict` | POST | Alias de `/infer`, mantido por compatibilidade |
+| `/predict/batch` | POST | Predição para **até 500** clientes em uma chamada |
+| `/metadata` | GET | Versão/métricas do modelo + JSON Schema de entrada/saída de `/infer` |
+| `/metrics` | GET | Métricas operacionais da API no formato Prometheus |
+
 **`GET /`** — informações básicas da API:
 
 ```bash
 curl http://127.0.0.1:8000/
 ```
 
-**`GET /health`** — verifica se a API está no ar, se o modelo foi carregado
-e um resumo de suas métricas:
+**`GET /health`** — liveness probe simples, sempre rápida:
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
 ```json
+{"status": "ok"}
+```
+
+**`GET /ready`** — readiness probe: confirma que o modelo está carregado.
+Diferente de `/health` — a API pode estar viva mas ainda não pronta (ex.:
+durante o carregamento do modelo, ou se o treino nunca foi executado):
+
+```bash
+curl http://127.0.0.1:8000/ready
+```
+
+```json
+{"status": "ready", "model_loaded": true}
+```
+
+**`GET /metadata`** — versão e métricas do modelo em produção, junto com o
+JSON Schema esperado por `/infer` (útil para descobrir o contrato da API
+programaticamente, sem ler a documentação):
+
+```bash
+curl http://127.0.0.1:8000/metadata
+```
+
+```json
 {
-  "status": "ok",
-  "model_loaded": true,
-  "model_version": "1.0.0",
   "model_info": {
     "model_version": "1.0.0",
     "trained_at": "2026-06-27T18:58:07.24Z",
     "test_roc_auc": 0.843,
     "test_recall": 0.778,
     "business_net_cost": -178606.4
-  }
+  },
+  "input_schema": { "...": "JSON Schema completo dos campos aceitos por /infer" },
+  "output_schema": { "...": "JSON Schema da resposta de /infer" }
 }
 ```
 
-**`POST /predict`** — recebe os dados de um cliente e retorna o risco de churn:
+**`GET /metrics`** — métricas operacionais da API (contagem de
+requisições, latência por rota, predições por nível de risco), no formato
+texto do Prometheus — pronto para scraping por um servidor Prometheus ou
+visualização em um dashboard Grafana:
+
+```bash
+curl http://127.0.0.1:8000/metrics
+```
+
+```
+churn_api_requests_total{method="POST",path="/infer",status_code="200"} 12.0
+churn_api_request_latency_seconds_sum{method="POST",path="/infer"} 0.58
+churn_predictions_total{risk_level="high"} 7.0
+churn_predictions_total{risk_level="low"} 5.0
+```
+
+**`POST /infer`** — recebe os dados de um cliente e retorna o risco de
+churn (endpoint canônico de inferência; `POST /predict` é um alias
+idêntico, mantido por compatibilidade):
 
 <details open>
 <summary><b>🐧🍎 Linux / macOS / 🪟 Windows (Git Bash)</b></summary>
 
 ```bash
-curl -X POST http://127.0.0.1:8000/predict \
+curl -X POST http://127.0.0.1:8000/infer \
   -H "Content-Type: application/json" \
   -d '{
     "gender": "Female", "SeniorCitizen": 0, "Partner": "Yes", "Dependents": "No",
@@ -443,7 +499,7 @@ $body = @{
   PaymentMethod = "Electronic check"; MonthlyCharges = 29.85; TotalCharges = 29.85
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/predict" -Method Post -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/infer" -Method Post -ContentType "application/json" -Body $body
 ```
 
 </details>
@@ -464,7 +520,7 @@ chegar à lógica de inferência — validação automática via Pydantic.
 ```bash
 curl -X POST http://127.0.0.1:8000/predict/batch \
   -H "Content-Type: application/json" \
-  -d '{"customers": [ { "...": "mesmo formato do /predict, um objeto por cliente" } ]}'
+  -d '{"customers": [ { "...": "mesmo formato do /infer, um objeto por cliente" } ]}'
 ```
 
 ```json
@@ -473,9 +529,9 @@ curl -X POST http://127.0.0.1:8000/predict/batch \
 
 ### Outros detalhes da API
 
-- Toda requisição é logada em formato estruturado (JSON) e recebe os
-  headers `X-Request-ID` e `X-Process-Time-Ms` (latência em milissegundos),
-  via middleware.
+- Toda requisição é logada em formato estruturado (JSON), registrada nas
+  métricas Prometheus (`/metrics`) e recebe os headers `X-Request-ID` e
+  `X-Process-Time-Ms` (latência em milissegundos), via middleware.
 - **CORS** habilitado — a API pode ser consumida diretamente do navegador
   por um frontend (ex.: dashboard de CRM).
 - Qualquer erro inesperado (não relacionado à validação de entrada) é
@@ -505,13 +561,13 @@ $env:PYTHONPATH = "src"; python -m pytest tests/ -v
 set PYTHONPATH=src && python -m pytest tests/ -v
 ```
 
-A suíte cobre os 3 tipos de teste exigidos, com **21 testes** no total:
+A suíte cobre os 3 tipos de teste exigidos, com **26 testes** no total:
 
 | Arquivo | Tipo | O que valida |
 |---|---|---|
 | `tests/test_schema.py` | Schema (pandera) | Domínio de valores categóricos, tipos, ausência de nulos no dataset bruto e pós-tratamento |
 | `tests/test_smoke.py` | Smoke test | Pipeline de dados, pré-processamento, treino reduzido da MLP e inferência executam de ponta a ponta sem erros |
-| `tests/test_api.py` | API (FastAPI TestClient) | `/`, `/health` (com `model_info`), `/predict` e `/predict/batch` (válido, inválido, limite de 500), CORS, headers de latência, erro 500 genérico sem detalhes internos |
+| `tests/test_api.py` | API (FastAPI TestClient) | `/`, `/health`, `/ready`, `/metadata`, `/metrics`, `/infer`, `/predict` (alias) e `/predict/batch` (válido, inválido, limite de 500), CORS, headers de latência, erro 500 genérico sem detalhes internos |
 
 Os testes de `test_smoke.py` e `test_api.py` que dependem do modelo treinado
 são automaticamente pulados (`pytest.skip`) se `make train` (ou o comando
@@ -602,13 +658,20 @@ reprodutível, API de inferência e testes automatizados.
   decisão da Etapa 2 (MLP como modelo de produção) e gera os artefatos
   finais (`models/preprocessor.joblib`, `models/mlp_model.pt`,
   `models/model_metadata.json`).
-- **API FastAPI** (`src/churn_prediction/api.py`), com 4 endpoints:
-  - `GET /`: informações básicas da API.
-  - `GET /health`: status da API e resumo das métricas do modelo carregado
-    (AUC-ROC, recall, custo de negócio no holdout de teste).
-  - `POST /predict`: predição para um único cliente.
+- **API FastAPI** (`src/churn_prediction/api.py`), seguindo a convenção de
+  plataformas de model serving em produção (KServe, Seldon, BentoML):
+  - `GET /health`: liveness — confirma que o processo está vivo (rápido,
+    não depende do modelo).
+  - `GET /ready`: readiness — confirma que o modelo está carregado e a API
+    está pronta para receber tráfego.
+  - `POST /infer`: predição para um único cliente (nome canônico);
+    `POST /predict` continua disponível como alias, por compatibilidade.
   - `POST /predict/batch`: predição em lote (até 500 clientes por chamada),
     processada de forma vetorizada (uma única passada pelo modelo).
+  - `GET /metadata`: versão e métricas do modelo (AUC-ROC, recall, custo de
+    negócio) + JSON Schema de entrada/saída de `/infer`.
+  - `GET /metrics`: métricas operacionais (contagem de requisições,
+    latência por rota, predições por nível de risco) no formato Prometheus.
   - Validação de entrada via Pydantic (schemas em `schemas.py`); middleware
     de latência (`X-Request-ID`, `X-Process-Time-Ms`); **CORS** habilitado
     para consumo direto a partir de um frontend/navegador; tratamento de
@@ -618,9 +681,9 @@ reprodutível, API de inferência e testes automatizados.
 - **Logging estruturado** (`src/churn_prediction/logging_config.py`): todo
   log da aplicação (treino e API) é emitido em JSON — nenhum módulo de
   produção usa `print()`.
-- **21 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
+- **26 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
   exigidos: schema (pandera), smoke test e testes de API — todos passando,
-  com 77% de cobertura de linha no pacote `churn_prediction`.
+  com 78% de cobertura de linha no pacote `churn_prediction`.
 - **Makefile** com os targets `install`, `lint`, `test`, `test-cov`,
   `train`, `run` e `clean`, com comando equivalente documentado para quem
   não tiver `make` disponível (ex.: Windows sem WSL/Chocolatey).
@@ -629,7 +692,7 @@ reprodutível, API de inferência e testes automatizados.
 
 ```bash
 make lint   # ruff: All checks passed!
-make test   # 21 passed
+make test   # 26 passed
 ```
 
 ## Próximas etapas
