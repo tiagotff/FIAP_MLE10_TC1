@@ -1,7 +1,7 @@
 # Tech Challenge 1 — Previsão de Churn com Pipeline Profissional End-to-End
 
 [![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)]()
-[![Etapa](https://img.shields.io/badge/etapa%20atual-3%20de%204-blue)]()
+[![Etapa](https://img.shields.io/badge/etapa%20atual-4%20de%204-blue)]()
 
 Projeto da Fase 1 da Pós Tech (FIAP) — **MLE10 / Grupo Tech Challenge 1**.
 
@@ -26,6 +26,7 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 - [Resultados da Etapa 1](#resultados-da-etapa-1)
 - [Resultados da Etapa 2](#resultados-da-etapa-2)
 - [Resultados da Etapa 3](#resultados-da-etapa-3)
+- [Resultados da Etapa 4](#resultados-da-etapa-4)
 - [Próximas etapas](#próximas-etapas)
 
 ---
@@ -46,7 +47,7 @@ reprodutibilidade, testes e documentação.
 | **1** | Entendimento e Preparação (EDA, ML Canvas, Baselines, MLflow) | ✅ Concluída |
 | **2** | Modelagem com Redes Neurais (MLP em PyTorch) | ✅ Concluída |
 | **3** | Engenharia e API (refatoração, FastAPI, testes) | ✅ Concluída |
-| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | ⏳ Próxima |
+| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | 🔄 Em andamento |
 
 ## Estrutura do repositório
 
@@ -56,7 +57,10 @@ reprodutibilidade, testes e documentação.
 │   ├── raw/                 # Dataset bruto (versionado: é pequeno e público)
 │   └── processed/            # Dados processados (não versionado)
 ├── docs/
-│   └── ml_canvas.md          # ML Canvas do projeto (Etapa 1)
+│   ├── ml_canvas.md             # ML Canvas do projeto (Etapa 1, atualizado nas Etapas 2/3)
+│   ├── model_card.md            # Model Card completo (Etapa 4)
+│   ├── deployment_architecture.md  # Arquitetura de deploy: batch + real-time (Etapa 4)
+│   └── monitoring_plan.md       # Plano de monitoramento: métricas, alertas, playbook (Etapa 4)
 ├── models/                   # Artefatos de modelo treinados (não versionado)
 ├── notebooks/
 │   ├── 01_eda_baselines.ipynb       # EDA completa + baselines (Etapa 1)
@@ -695,12 +699,34 @@ make lint   # ruff: All checks passed!
 make test   # 26 passed
 ```
 
+## Resultados da Etapa 4
+
+Documentação final do projeto: Model Card, arquitetura de deploy e plano
+de monitoramento.
+
+### O que foi entregue
+
+- **[Model Card](docs/model_card.md)**: performance no holdout de teste
+  (AUC-ROC 0.844, recall 0.810), análise de fairness por gênero,
+  por `SeniorCitizen` e por tipo de contrato (com achado real de recall
+  0.000 em contratos de 2 anos, devido a apenas 9 casos positivos no
+  teste), limitações conhecidas, considerações éticas e cenários de falha
+  mapeados contra o que já está implementado na API.
+- **[Arquitetura de deploy](docs/deployment_architecture.md)**: decisão
+  por uma arquitetura **híbrida** (batch diário + API real-time já
+  construída na Etapa 3), com justificativa baseada nos dois modos de uso
+  reais do stakeholder (CRM): priorização de carteira (batch) e consulta
+  pontual durante atendimento (real-time).
+- **[Plano de monitoramento](docs/monitoring_plan.md)**: métricas
+  operacionais (já instrumentadas via `/metrics`) e de qualidade do
+  modelo (via `/metadata`), thresholds de alerta, cadência de
+  re-avaliação periódica (mensal, dado o atraso natural do rótulo de
+  churn) e playbook de resposta para 4 cenários de incidente.
+
 ## Próximas etapas
 
-- **Etapa 4**: Model Card completo (performance, limitações, vieses,
-  cenários de falha), documentação da arquitetura de deploy (batch vs.
-  real-time), plano de monitoramento (métricas, alertas, playbook de
-  resposta), vídeo STAR e (opcional) deploy em nuvem.
+- **Etapa 4 (itens restantes)**: roteiro e gravação do vídeo STAR (5 min)
+  e avaliação de viabilidade de deploy opcional em nuvem (AWS/Azure/GCP).
 
 ---
 
