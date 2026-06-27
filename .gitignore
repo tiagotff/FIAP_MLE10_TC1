@@ -1,0 +1,89 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ===== Ambientes virtuais =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ===== Testes / Coverage =====
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.cache
+coverage.xml
+*.cover
+
+# ===== Linting / Type checking =====
+.ruff_cache/
+.mypy_cache/
+
+# ===== MLflow =====
+mlruns/
+mlartifacts/
+mlflow.db
+
+# ===== Modelos e artefatos pesados =====
+models/*.pkl
+models/*.pt
+models/*.pth
+models/*.joblib
+!models/.gitkeep
+
+# ===== Dados =====
+# Versionamos apenas o dataset bruto de referência (pequeno, público).
+# Dados processados/intermediários não são versionados.
+data/processed/*
+!data/processed/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+
+# ===== Variáveis de ambiente / segredos =====
+.env
+.env.*
+*.pem
+*.key
+
+# ===== IDEs =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Outros =====
+.ipynb_checkpoints
+*.bak
