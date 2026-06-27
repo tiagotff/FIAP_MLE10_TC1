@@ -1,0 +1,40 @@
+{
+  "model_version": "1.0.0",
+  "trained_at": "2026-06-27T18:58:07.243984+00:00",
+  "seed": 42,
+  "architecture": {
+    "hidden_sizes": [
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "n_features": 44
+  },
+  "training": {
+    "n_epochs_trained": 25,
+    "best_val_loss": 0.7123,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "patience": 10,
+    "pos_weight": 2.7684
+  },
+  "test_metrics": {
+    "roc_auc": 0.8430416698958899,
+    "pr_auc": 0.631381449533478,
+    "f1": 0.6191489361702127,
+    "precision": 0.5141342756183745,
+    "recall": 0.7780748663101604,
+    "accuracy": 0.7459190915542938
+  },
+  "business_metrics": {
+    "n_tp": 291,
+    "n_fp": 275,
+    "n_fn": 83,
+    "n_tn": 760,
+    "cost_fn": 59836.200000000004,
+    "cost_fp": 13750.0,
+    "gain_tp": 252192.59999999998,
+    "net_cost": -178606.39999999997
+  }
+}

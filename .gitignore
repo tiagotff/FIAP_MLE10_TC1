@@ -55,6 +55,9 @@ models/*.pt
 models/*.pth
 models/*.joblib
 !models/.gitkeep
+# model_metadata.json é pequeno, legível e documenta o modelo treinado
+# (métricas, parâmetros, versão) — versionado propositalmente.
+!models/model_metadata.json
 
 # ===== Dados =====
 # Versionamos apenas o dataset bruto de referência (pequeno, público).
