@@ -69,21 +69,45 @@ reprodutibilidade, testes e documentação.
 
 ## Setup do ambiente
 
-Pré-requisitos: **Python ≥ 3.10**.
+> ⚠️ **Use Python 3.10, 3.11 ou 3.12.** Versões mais novas (3.13/3.14) **não
+> são suportadas** — o MLflow 3.x falha ao iniciar nessas versões
+> (`ImportError: cannot import name 'Traversable' from 'importlib.abc'`),
+> pois depende de uma API do `importlib.abc` removida no Python 3.13+. O
+> `pyproject.toml` já restringe `requires-python` para evitar essa instalação,
+> mas é importante **criar o ambiente virtual já com a versão certa** (veja o
+> passo 2 abaixo).
 
-```bash
+Pré-requisitos: **Python 3.10, 3.11 ou 3.12** (recomendado: 3.12).
+
+No Windows, se você tiver várias versões instaladas, confira quais estão
+disponíveis com:
+
+\`\`\`bash
+py -0
+\`\`\`
+
+Se não tiver nenhuma versão entre 3.10 e 3.12, baixe o instalador do Python
+3.12 em https://www.python.org/downloads/release/python-3127/ (marque
+"Add python.exe to PATH" durante a instalação).
+
+\`\`\`bash
 # 1. Clonar o repositório
 git clone https://github.com/tiagotff/FIAP_MLE10_TC1.git
 cd FIAP_MLE10_TC1
 
-# 2. Criar e ativar um ambiente virtual
-python3 -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate    # Windows
+# 2. Criar o ambiente virtual com uma versão suportada (ex.: 3.12)
+python3.12 -m venv .venv          # Linux/macOS
+# py -3.12 -m venv .venv          # Windows
 
-# 3. Instalar o projeto e suas dependências (modo editável, com extras de dev)
+# 3. Ativar o ambiente virtual
+source .venv/bin/activate         # Linux/macOS
+# source .venv/Scripts/activate   # Windows (Git Bash)
+# .venv\Scripts\activate.bat      # Windows (cmd)
+# .venv\Scripts\Activate.ps1      # Windows (PowerShell)
+
+# 4. Instalar o projeto e suas dependências (modo editável, com extras de dev)
 pip install -e ".[dev]"
-```
+\`\`\`
 
 Isso instala todas as dependências declaradas no `pyproject.toml`: PyTorch,
 Scikit-Learn, MLflow, FastAPI, Pydantic, Pandera, ferramentas de teste
@@ -129,6 +153,25 @@ Depois acesse `http://localhost:5000` no navegador.
 ```bash
 ruff check .
 ```
+
+## Troubleshooting
+
+**`ImportError: cannot import name 'Traversable' from 'importlib.abc'` ao
+rodar `mlflow ui` ou `mlflow.start_run()`.**
+Você está usando Python 3.13 ou 3.14. Recrie o ambiente virtual com Python
+3.10–3.12 (veja [Setup do ambiente](#setup-do-ambiente)).
+
+**`[WinError 10013] Foi feita uma tentativa de acesso a um soquete...` ao
+rodar `mlflow ui` no Windows.**
+A porta padrão (5000) está bloqueada (uso por outro processo, antivírus ou
+reserva do sistema). Use outra porta:
+
+\`\`\`bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
+\`\`\`
+
+E acesse `http://localhost:5001`.
+
 
 ## Dataset
 

@@ -3,7 +3,7 @@ name = "churn-prediction"
 version = "0.1.0"
 description = "Rede neural (MLP) para previsão de churn de clientes de telecomunicações, com pipeline profissional end-to-end (PyTorch, Scikit-Learn, MLflow, FastAPI)."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
 authors = [
     { name = "Grupo FIAP MLE10 - Tech Challenge 1" }
