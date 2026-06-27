@@ -19,8 +19,12 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Setup do ambiente](#setup-do-ambiente)
 - [Como executar](#como-executar)
+- [API de inferência](#api-de-inferência)
+- [Testes automatizados](#testes-automatizados)
 - [Dataset](#dataset)
 - [Resultados da Etapa 1](#resultados-da-etapa-1)
+- [Resultados da Etapa 2](#resultados-da-etapa-2)
+- [Resultados da Etapa 3](#resultados-da-etapa-3)
 - [Próximas etapas](#próximas-etapas)
 
 ---
@@ -40,8 +44,8 @@ reprodutibilidade, testes e documentação.
 |---|---|---|
 | **1** | Entendimento e Preparação (EDA, ML Canvas, Baselines, MLflow) | ✅ Concluída |
 | **2** | Modelagem com Redes Neurais (MLP em PyTorch) | ✅ Concluída |
-| **3** | Engenharia e API (refatoração, FastAPI, testes) | ⏳ Próxima |
-| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | ⏳ Pendente |
+| **3** | Engenharia e API (refatoração, FastAPI, testes) | ✅ Concluída |
+| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | ⏳ Próxima |
 
 ## Estrutura do repositório
 
@@ -62,11 +66,23 @@ reprodutibilidade, testes e documentação.
 ├── src/
 │   └── churn_prediction/
 │       ├── __init__.py
-│       ├── config.py          # Configuração central: seeds, paths, MLflow
-│       ├── data.py            # Carga, tratamento de qualidade e splits
-│       ├── business_cost.py   # Framework de custo de negócio (FP vs FN)
-│       └── mlp_model.py       # Arquitetura MLP + treino com early stopping
-├── tests/                    # Testes automatizados (a partir da Etapa 3)
+│       ├── config.py           # Configuração central: seeds, paths, MLflow
+│       ├── data.py             # Carga, tratamento de qualidade e splits
+│       ├── pipeline.py         # Pipeline sklearn + transformador custom (TenureBucketizer)
+│       ├── business_cost.py    # Framework de custo de negócio (FP vs FN)
+│       ├── mlp_model.py        # Arquitetura MLP + treino com early stopping
+│       ├── train.py            # Script de treino do modelo de produção
+│       ├── schemas.py          # Schemas Pydantic (request/response da API)
+│       ├── inference.py        # Carrega artefatos e executa predições
+│       ├── logging_config.py   # Logging estruturado (JSON), sem print()
+│       └── api.py              # API FastAPI (/predict, /health)
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py             # Fixtures compartilhadas
+│   ├── test_schema.py          # Validação de schema (pandera)
+│   ├── test_smoke.py           # Smoke tests do pipeline/treino/inferência
+│   └── test_api.py             # Testes dos endpoints da API (FastAPI TestClient)
+├── Makefile                    # make install | lint | test | train | run
 ├── .gitignore
 ├── pyproject.toml            # Single source of truth: deps, ruff, pytest
 └── README.md
@@ -184,6 +200,12 @@ Depois acesse `http://localhost:5000` no navegador.
 ruff check .
 ```
 
+Ou, via Makefile:
+
+```bash
+make lint
+```
+
 ## Troubleshooting
 
 **`ImportError: cannot import name 'Traversable' from 'importlib.abc'` ao
@@ -196,12 +218,102 @@ rodar `mlflow ui` no Windows.**
 A porta padrão (5000) está bloqueada (uso por outro processo, antivírus ou
 reserva do sistema). Use outra porta:
 
-\`\`\`bash
+```bash
 mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
-\`\`\`
+```
 
 E acesse `http://localhost:5001`.
 
+## API de inferência
+
+A partir da Etapa 3, o modelo escolhido para produção — a **MLP (PyTorch)**,
+por ter o melhor recall e o melhor resultado no framework de custo de
+negócio (ver [Resultados da Etapa 2](#resultados-da-etapa-2)) — é servido
+via uma API FastAPI.
+
+### 1. Treinar o modelo e gerar os artefatos
+
+Antes de iniciar a API, é necessário treinar o modelo e salvar os artefatos
+em `models/` (não versionados em git — apenas `model_metadata.json` é
+versionado, por ser pequeno e legível):
+
+```bash
+make train
+# equivalente a: PYTHONPATH=src python -m churn_prediction.train
+```
+
+Isso gera:
+- `models/preprocessor.joblib` — pipeline de pré-processamento ajustado.
+- `models/mlp_model.pt` — pesos treinados da MLP.
+- `models/model_metadata.json` — métricas, parâmetros e versão do modelo.
+
+### 2. Iniciar a API
+
+```bash
+make run
+# equivalente a: PYTHONPATH=src python -m uvicorn churn_prediction.api:app --reload
+```
+
+A API fica disponível em `http://127.0.0.1:8000`. Documentação interativa
+(Swagger UI) em `http://127.0.0.1:8000/docs`.
+
+### Endpoints
+
+**`GET /health`** — verifica se a API está no ar e se o modelo foi carregado:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+```json
+{"status": "ok", "model_loaded": true, "model_version": "1.0.0"}
+```
+
+**`POST /predict`** — recebe os dados de um cliente e retorna o risco de churn:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gender": "Female", "SeniorCitizen": 0, "Partner": "Yes", "Dependents": "No",
+    "tenure": 1, "PhoneService": "No", "MultipleLines": "No phone service",
+    "InternetService": "DSL", "OnlineSecurity": "No", "OnlineBackup": "Yes",
+    "DeviceProtection": "No", "TechSupport": "No", "StreamingTV": "No",
+    "StreamingMovies": "No", "Contract": "Month-to-month", "PaperlessBilling": "Yes",
+    "PaymentMethod": "Electronic check", "MonthlyCharges": 29.85, "TotalCharges": 29.85
+  }'
+```
+
+```json
+{"churn_probability": 0.7829, "churn_prediction": true, "risk_level": "high", "model_version": "1.0.0"}
+```
+
+Entradas inválidas (ex.: uma categoria fora do domínio esperado, como
+`"Contract": "Three years"`) são rejeitadas com **HTTP 422**, antes de
+chegar à lógica de inferência — validação automática via Pydantic.
+
+Toda requisição é logada em formato estruturado (JSON) e recebe os headers
+`X-Request-ID` e `X-Process-Time-Ms` (latência em milissegundos), via
+middleware.
+
+## Testes automatizados
+
+```bash
+make test       # roda a suíte completa
+make test-cov    # roda com relatório de cobertura
+```
+
+A suíte cobre os 3 tipos de teste exigidos, com 15 testes no total:
+
+| Arquivo | Tipo | O que valida |
+|---|---|---|
+| `tests/test_schema.py` | Schema (pandera) | Domínio de valores categóricos, tipos, ausência de nulos no dataset bruto e pós-tratamento |
+| `tests/test_smoke.py` | Smoke test | Pipeline de dados, pré-processamento, treino reduzido da MLP e inferência executam de ponta a ponta sem erros |
+| `tests/test_api.py` | API (FastAPI TestClient) | Códigos de status, validação Pydantic (422 em payload inválido), headers de latência, consistência da predição |
+
+Os testes de `test_smoke.py` e `test_api.py` que dependem do modelo treinado
+são automaticamente pulados (`pytest.skip`) se `make train` ainda não tiver
+sido executado.
 
 ## Dataset
 
@@ -272,13 +384,48 @@ estável nessa faixa.
 
 Detalhes completos do framework de custo: ver [`docs/ml_canvas.md`](docs/ml_canvas.md#11-aplicação-do-framework-de-custo-etapa-2).
 
+## Resultados da Etapa 3
+
+Refatoração completa do projeto em módulos testáveis, com pipeline
+reprodutível, API de inferência e testes automatizados.
+
+### O que foi entregue
+
+- **Pipeline reprodutível** (`src/churn_prediction/pipeline.py`): além do
+  `ColumnTransformer` (escala + one-hot), inclui um **transformador
+  customizado** (`TenureBucketizer`), que deriva a feature `tenure_bucket`
+  a partir do achado da EDA (Etapa 1) de que o churn cai de forma quase
+  monotônica com o tempo de relacionamento.
+- **Script de treino** (`src/churn_prediction/train.py`): consolida a
+  decisão da Etapa 2 (MLP como modelo de produção) e gera os artefatos
+  finais (`models/preprocessor.joblib`, `models/mlp_model.pt`,
+  `models/model_metadata.json`).
+- **API FastAPI** (`src/churn_prediction/api.py`): endpoints `/predict` e
+  `/health`, validação de entrada via Pydantic (schemas em `schemas.py`),
+  middleware de latência (`X-Request-ID`, `X-Process-Time-Ms`) e tratamento
+  de erro dedicado quando o modelo não está disponível (HTTP 503).
+- **Logging estruturado** (`src/churn_prediction/logging_config.py`): todo
+  log da aplicação (treino e API) é emitido em JSON — nenhum módulo de
+  produção usa `print()`.
+- **15 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
+  exigidos: schema (pandera), smoke test e testes de API — todos passando,
+  com 74% de cobertura de linha no pacote `churn_prediction`.
+- **Makefile** com os targets `install`, `lint`, `test`, `test-cov`,
+  `train`, `run` e `clean`.
+
+### Validação de qualidade nesta etapa
+
+```bash
+make lint   # ruff: All checks passed!
+make test   # 15 passed
+```
+
 ## Próximas etapas
 
-- **Etapa 3**: refatoração em módulos (`src/`, parcialmente já iniciado),
-  pipeline reprodutível, testes (pytest, pandera), API FastAPI
-  (`/predict`, `/health`), logging estruturado.
-- **Etapa 4**: Model Card, plano de monitoramento, vídeo STAR e
-  (opcional) deploy em nuvem.
+- **Etapa 4**: Model Card completo (performance, limitações, vieses,
+  cenários de falha), documentação da arquitetura de deploy (batch vs.
+  real-time), plano de monitoramento (métricas, alertas, playbook de
+  resposta), vídeo STAR e (opcional) deploy em nuvem.
 
 ---
 

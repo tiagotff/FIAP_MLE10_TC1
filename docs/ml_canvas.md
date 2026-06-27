@@ -158,3 +158,33 @@ dado o maior recall e o melhor resultado no framework de custo de negócio —
 sem perder de vista que a Regressão Logística continua sendo uma alternativa
 competitiva e mais simples/interpretável, relevante para a decisão final de
 arquitetura de deploy na Etapa 4.
+
+## 12. Modelo de produção e API (Etapa 3)
+
+A **MLP (PyTorch)** foi confirmada como modelo de produção, consolidando a
+conclusão da Etapa 2. O modelo é servido via uma API FastAPI síncrona
+(`/predict`), adequada ao SLO de latência definido na Seção 5
+(p95 < 300ms) — a inferência de um único cliente em CPU leva poucos
+milissegundos, dado o tamanho moderado da rede (64→32 neurônios).
+
+### Decisões de engenharia desta etapa
+
+- **Pipeline com transformador customizado**: a feature `tenure_bucket`
+  (faixas de tempo de relacionamento) foi formalizada em um transformador
+  sklearn (`TenureBucketizer`), reaproveitável entre treino e inferência —
+  elimina o risco de divergência entre a lógica usada no notebook de
+  exploração e a lógica usada em produção.
+- **Validação de entrada estrita**: cada campo categórico do payload da API
+  é validado contra o domínio exato observado na EDA (Etapa 1), via
+  `Literal` do Pydantic — uma categoria nunca vista pelo modelo (ex.: um
+  novo método de pagamento) é rejeitada com HTTP 422 antes de chegar à
+  inferência, evitando previsões silenciosamente erradas.
+- **Modelo não versionado em git, mas reprodutível**: os pesos do modelo
+  (`mlp_model.pt`) e o pipeline ajustado (`preprocessor.joblib`) não são
+  versionados (são artefatos binários grandes e regeráveis), mas
+  `model_metadata.json` é versionado — documentando métricas, parâmetros e
+  versão do modelo que gerou aqueles artefatos, mesmo sem os pesos em si.
+- **Faixas de risco operacional**: a probabilidade contínua é também
+  traduzida em `low`/`medium`/`high` (thresholds em 0.3 e 0.6), facilitando
+  a priorização de campanhas pelo time de Retenção/CRM (stakeholder
+  definido na Seção 2) sem que precisem interpretar uma probabilidade bruta.
