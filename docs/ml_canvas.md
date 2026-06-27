@@ -188,3 +188,15 @@ milissegundos, dado o tamanho moderado da rede (64→32 neurônios).
   traduzida em `low`/`medium`/`high` (thresholds em 0.3 e 0.6), facilitando
   a priorização de campanhas pelo time de Retenção/CRM (stakeholder
   definido na Seção 2) sem que precisem interpretar uma probabilidade bruta.
+- **Predição em lote (`/predict/batch`)**: além da predição unitária,
+  o time de Retenção/CRM pode pontuar até 500 clientes em uma única
+  chamada, processada de forma vetorizada (uma única passada pelo modelo)
+  — relevante para rotinas batch periódicas de priorização de carteira.
+- **Observabilidade do modelo via `/health`**: o endpoint de saúde expõe um
+  resumo das métricas do modelo carregado (AUC-ROC, recall, custo de
+  negócio), permitindo verificar rapidamente qual versão/qualidade de
+  modelo está em produção sem consultar o MLflow diretamente.
+- **Falha segura (fail-safe) em erros inesperados**: qualquer exceção não
+  tratada pela API retorna HTTP 500 com uma mensagem genérica — detalhes
+  internos (stack trace, tipo da exceção) nunca são expostos ao cliente,
+  apenas registrados no log estruturado para investigação.

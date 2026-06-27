@@ -1,7 +1,7 @@
 # Tech Challenge 1 — Previsão de Churn com Pipeline Profissional End-to-End
 
 [![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)]()
-[![Etapa](https://img.shields.io/badge/etapa%20atual-1%20de%204-blue)]()
+[![Etapa](https://img.shields.io/badge/etapa%20atual-3%20de%204-blue)]()
 
 Projeto da Fase 1 da Pós Tech (FIAP) — **MLE10 / Grupo Tech Challenge 1**.
 
@@ -19,6 +19,7 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Setup do ambiente](#setup-do-ambiente)
 - [Como executar](#como-executar)
+- [Troubleshooting](#troubleshooting)
 - [API de inferência](#api-de-inferência)
 - [Testes automatizados](#testes-automatizados)
 - [Dataset](#dataset)
@@ -75,7 +76,7 @@ reprodutibilidade, testes e documentação.
 │       ├── schemas.py          # Schemas Pydantic (request/response da API)
 │       ├── inference.py        # Carrega artefatos e executa predições
 │       ├── logging_config.py   # Logging estruturado (JSON), sem print()
-│       └── api.py              # API FastAPI (/predict, /health)
+│       └── api.py              # API FastAPI (/, /health, /predict, /predict/batch)
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # Fixtures compartilhadas
@@ -95,44 +96,102 @@ reprodutibilidade, testes e documentação.
 > (`ImportError: cannot import name 'Traversable' from 'importlib.abc'`),
 > pois depende de uma API do `importlib.abc` removida no Python 3.13+. O
 > `pyproject.toml` já restringe `requires-python` para evitar essa instalação,
-> mas é importante **criar o ambiente virtual já com a versão certa** (veja o
-> passo 2 abaixo).
+> mas é importante **criar o ambiente virtual já com a versão certa**.
 
-Pré-requisitos: **Python 3.10, 3.11 ou 3.12** (recomendado: 3.12).
+Pré-requisitos: **Python 3.10, 3.11 ou 3.12** (recomendado: 3.12), **Git**.
 
-No Windows, se você tiver várias versões instaladas, confira quais estão
-disponíveis com:
+### 1. Clonar o repositório
 
-\`\`\`bash
-py -0
-\`\`\`
-
-Se não tiver nenhuma versão entre 3.10 e 3.12, baixe o instalador do Python
-3.12 em https://www.python.org/downloads/release/python-3127/ (marque
-"Add python.exe to PATH" durante a instalação).
-
-\`\`\`bash
-# 1. Clonar o repositório
+```bash
 git clone https://github.com/tiagotff/FIAP_MLE10_TC1.git
 cd FIAP_MLE10_TC1
+```
 
-# 2. Criar o ambiente virtual com uma versão suportada (ex.: 3.12)
-python3.12 -m venv .venv          # Linux/macOS
-py -3.12 -m venv .venv            # Windows
+### 2. Criar o ambiente virtual com uma versão suportada
 
-# 3. Ativar o ambiente virtual
-source .venv/bin/activate         # Linux/macOS
-source .venv/Scripts/activate     # Windows (Git Bash)
-.venv\Scripts\activate.bat        # Windows (cmd)
-.venv\Scripts\Activate.ps1        # Windows (PowerShell)
+<details open>
+<summary><b>🐧 Linux / 🍎 macOS</b></summary>
 
-# 4. Instalar o projeto e suas dependências (modo editável, com extras de dev)
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+</details>
+
+<details open>
+<summary><b>🪟 Windows (Git Bash / MINGW64)</b></summary>
+
+Confira as versões de Python instaladas com `py -0`. Se não tiver 3.10–3.12,
+baixe o instalador em https://www.python.org/downloads/release/python-3127/
+(marque **"Add python.exe to PATH"** durante a instalação).
+
+```bash
+py -0                       # lista as versões instaladas
+py -3.12 -m venv .venv
+source .venv/Scripts/activate
+```
+
+</details>
+
+<details>
+<summary><b>🪟 Windows (PowerShell)</b></summary>
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Se aparecer um erro de política de execução de scripts, rode uma vez (como
+administrador): `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+</details>
+
+<details>
+<summary><b>🪟 Windows (cmd)</b></summary>
+
+```cmd
+py -3.12 -m venv .venv
+.venv\Scripts\activate.bat
+```
+
+</details>
+
+Em qualquer sistema, o prompt do terminal passa a exibir `(.venv)` quando o
+ambiente está ativado corretamente.
+
+### 3. Instalar o projeto e as dependências
+
+```bash
 pip install -e ".[dev]"
-\`\`\`
+```
 
 Isso instala todas as dependências declaradas no `pyproject.toml`: PyTorch,
 Scikit-Learn, MLflow, FastAPI, Pydantic, Pandera, ferramentas de teste
-(`pytest`) e lint (`ruff`).
+(`pytest`, `pytest-cov`) e lint (`ruff`).
+
+### Sobre o `make`
+
+Este projeto usa um `Makefile` (`make install`, `make lint`, `make test`,
+`make train`, `make run`) como forma padronizada de rodar tarefas comuns.
+
+- **Linux / macOS**: `make` já vem instalado nativamente.
+- **Windows**: `make` **não** vem por padrão no Git Bash/MINGW64. Duas opções:
+  1. **Sem instalar nada** — rode o comando equivalente direto (documentado
+     ao lado de cada `make <alvo>` na tabela abaixo e ao longo deste README).
+  2. **Instalar o `make`** — via [Chocolatey](https://chocolatey.org/):
+     `choco install make`, ou usando o WSL (Windows Subsystem for Linux),
+     que já inclui `make` nativamente.
+
+| `make <alvo>` | Comando equivalente (sem `make`) |
+|---|---|
+| `make install` | `pip install -e ".[dev]"` |
+| `make lint` | `ruff check .` |
+| `make format` | `ruff check --fix .` |
+| `make test` | ver [Testes automatizados](#testes-automatizados) |
+| `make test-cov` | ver [Testes automatizados](#testes-automatizados) |
+| `make train` | ver [API de inferência](#api-de-inferência) |
+| `make run` | ver [API de inferência](#api-de-inferência) |
 
 ## Como executar
 
@@ -224,6 +283,11 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
 
 E acesse `http://localhost:5001`.
 
+**`bash: make: command not found` (Windows, Git Bash).**
+O Windows não inclui `make` nativamente. Use o comando equivalente sem
+`make` (documentado na tabela em [Setup do ambiente](#setup-do-ambiente)),
+ou instale `make` via `choco install make` (Chocolatey) ou WSL.
+
 ## API de inferência
 
 A partir da Etapa 3, o modelo escolhido para produção — a **MLP (PyTorch)**,
@@ -235,12 +299,53 @@ via uma API FastAPI.
 
 Antes de iniciar a API, é necessário treinar o modelo e salvar os artefatos
 em `models/` (não versionados em git — apenas `model_metadata.json` é
-versionado, por ser pequeno e legível):
+versionado, por ser pequeno e legível).
+
+Com `make` (Linux/macOS, ou Windows com `make` instalado):
 
 ```bash
 make train
-# equivalente a: PYTHONPATH=src python -m churn_prediction.train
 ```
+
+Sem `make`:
+
+<details open>
+<summary><b>🐧🍎 Linux / macOS (bash/zsh)</b></summary>
+
+```bash
+PYTHONPATH=src python -m churn_prediction.train
+```
+
+</details>
+
+<details open>
+<summary><b>🪟 Windows (Git Bash)</b></summary>
+
+```bash
+PYTHONPATH=src python -m churn_prediction.train
+```
+
+</details>
+
+<details>
+<summary><b>🪟 Windows (PowerShell)</b></summary>
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m churn_prediction.train
+```
+
+</details>
+
+<details>
+<summary><b>🪟 Windows (cmd)</b></summary>
+
+```cmd
+set PYTHONPATH=src
+python -m churn_prediction.train
+```
+
+</details>
 
 Isso gera:
 - `models/preprocessor.joblib` — pipeline de pré-processamento ajustado.
@@ -249,27 +354,63 @@ Isso gera:
 
 ### 2. Iniciar a API
 
+Com `make`:
+
 ```bash
 make run
-# equivalente a: PYTHONPATH=src python -m uvicorn churn_prediction.api:app --reload
+```
+
+Sem `make` (mesma lógica de `PYTHONPATH` do passo anterior, em qualquer SO):
+
+```bash
+# Linux/macOS ou Windows (Git Bash):
+PYTHONPATH=src python -m uvicorn churn_prediction.api:app --reload
+
+# Windows (PowerShell):
+$env:PYTHONPATH = "src"; python -m uvicorn churn_prediction.api:app --reload
+
+# Windows (cmd):
+set PYTHONPATH=src && python -m uvicorn churn_prediction.api:app --reload
 ```
 
 A API fica disponível em `http://127.0.0.1:8000`. Documentação interativa
-(Swagger UI) em `http://127.0.0.1:8000/docs`.
+(Swagger UI) em `http://127.0.0.1:8000/docs` — você pode testar todos os
+endpoints abaixo direto no navegador, sem precisar de `curl`.
 
 ### Endpoints
 
-**`GET /health`** — verifica se a API está no ar e se o modelo foi carregado:
+**`GET /`** — informações básicas da API:
+
+```bash
+curl http://127.0.0.1:8000/
+```
+
+**`GET /health`** — verifica se a API está no ar, se o modelo foi carregado
+e um resumo de suas métricas:
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
 ```json
-{"status": "ok", "model_loaded": true, "model_version": "1.0.0"}
+{
+  "status": "ok",
+  "model_loaded": true,
+  "model_version": "1.0.0",
+  "model_info": {
+    "model_version": "1.0.0",
+    "trained_at": "2026-06-27T18:58:07.24Z",
+    "test_roc_auc": 0.843,
+    "test_recall": 0.778,
+    "business_net_cost": -178606.4
+  }
+}
 ```
 
 **`POST /predict`** — recebe os dados de um cliente e retorna o risco de churn:
+
+<details open>
+<summary><b>🐧🍎 Linux / macOS / 🪟 Windows (Git Bash)</b></summary>
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predict \
@@ -284,6 +425,31 @@ curl -X POST http://127.0.0.1:8000/predict \
   }'
 ```
 
+</details>
+
+<details>
+<summary><b>🪟 Windows (PowerShell)</b></summary>
+
+O `curl` do PowerShell é um alias de `Invoke-WebRequest` com sintaxe
+diferente — use `curl.exe` para o `curl` real, ou `Invoke-RestMethod`:
+
+```powershell
+$body = @{
+  gender = "Female"; SeniorCitizen = 0; Partner = "Yes"; Dependents = "No"
+  tenure = 1; PhoneService = "No"; MultipleLines = "No phone service"
+  InternetService = "DSL"; OnlineSecurity = "No"; OnlineBackup = "Yes"
+  DeviceProtection = "No"; TechSupport = "No"; StreamingTV = "No"
+  StreamingMovies = "No"; Contract = "Month-to-month"; PaperlessBilling = "Yes"
+  PaymentMethod = "Electronic check"; MonthlyCharges = 29.85; TotalCharges = 29.85
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/predict" -Method Post -ContentType "application/json" -Body $body
+```
+
+</details>
+
+Resposta:
+
 ```json
 {"churn_probability": 0.7829, "churn_prediction": true, "risk_level": "high", "model_version": "1.0.0"}
 ```
@@ -292,28 +458,64 @@ Entradas inválidas (ex.: uma categoria fora do domínio esperado, como
 `"Contract": "Three years"`) são rejeitadas com **HTTP 422**, antes de
 chegar à lógica de inferência — validação automática via Pydantic.
 
-Toda requisição é logada em formato estruturado (JSON) e recebe os headers
-`X-Request-ID` e `X-Process-Time-Ms` (latência em milissegundos), via
-middleware.
+**`POST /predict/batch`** — mesma predição, para até 500 clientes em uma
+única chamada (útil para pontuar uma carteira de clientes de uma vez):
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict/batch \
+  -H "Content-Type: application/json" \
+  -d '{"customers": [ { "...": "mesmo formato do /predict, um objeto por cliente" } ]}'
+```
+
+```json
+{"predictions": [{"churn_probability": 0.78, "...": "..."}], "count": 1}
+```
+
+### Outros detalhes da API
+
+- Toda requisição é logada em formato estruturado (JSON) e recebe os
+  headers `X-Request-ID` e `X-Process-Time-Ms` (latência em milissegundos),
+  via middleware.
+- **CORS** habilitado — a API pode ser consumida diretamente do navegador
+  por um frontend (ex.: dashboard de CRM).
+- Qualquer erro inesperado (não relacionado à validação de entrada) é
+  capturado por um handler genérico e retorna **HTTP 500** com uma mensagem
+  padrão — detalhes internos (stack trace, exceção original) nunca são
+  expostos na resposta, apenas registrados no log estruturado.
 
 ## Testes automatizados
+
+Com `make`:
 
 ```bash
 make test       # roda a suíte completa
 make test-cov    # roda com relatório de cobertura
 ```
 
-A suíte cobre os 3 tipos de teste exigidos, com 15 testes no total:
+Sem `make`:
+
+```bash
+# Linux/macOS ou Windows (Git Bash):
+PYTHONPATH=src python -m pytest tests/ -v
+
+# Windows (PowerShell):
+$env:PYTHONPATH = "src"; python -m pytest tests/ -v
+
+# Windows (cmd):
+set PYTHONPATH=src && python -m pytest tests/ -v
+```
+
+A suíte cobre os 3 tipos de teste exigidos, com **21 testes** no total:
 
 | Arquivo | Tipo | O que valida |
 |---|---|---|
 | `tests/test_schema.py` | Schema (pandera) | Domínio de valores categóricos, tipos, ausência de nulos no dataset bruto e pós-tratamento |
 | `tests/test_smoke.py` | Smoke test | Pipeline de dados, pré-processamento, treino reduzido da MLP e inferência executam de ponta a ponta sem erros |
-| `tests/test_api.py` | API (FastAPI TestClient) | Códigos de status, validação Pydantic (422 em payload inválido), headers de latência, consistência da predição |
+| `tests/test_api.py` | API (FastAPI TestClient) | `/`, `/health` (com `model_info`), `/predict` e `/predict/batch` (válido, inválido, limite de 500), CORS, headers de latência, erro 500 genérico sem detalhes internos |
 
 Os testes de `test_smoke.py` e `test_api.py` que dependem do modelo treinado
-são automaticamente pulados (`pytest.skip`) se `make train` ainda não tiver
-sido executado.
+são automaticamente pulados (`pytest.skip`) se `make train` (ou o comando
+equivalente) ainda não tiver sido executado.
 
 ## Dataset
 
@@ -400,24 +602,34 @@ reprodutível, API de inferência e testes automatizados.
   decisão da Etapa 2 (MLP como modelo de produção) e gera os artefatos
   finais (`models/preprocessor.joblib`, `models/mlp_model.pt`,
   `models/model_metadata.json`).
-- **API FastAPI** (`src/churn_prediction/api.py`): endpoints `/predict` e
-  `/health`, validação de entrada via Pydantic (schemas em `schemas.py`),
-  middleware de latência (`X-Request-ID`, `X-Process-Time-Ms`) e tratamento
-  de erro dedicado quando o modelo não está disponível (HTTP 503).
+- **API FastAPI** (`src/churn_prediction/api.py`), com 4 endpoints:
+  - `GET /`: informações básicas da API.
+  - `GET /health`: status da API e resumo das métricas do modelo carregado
+    (AUC-ROC, recall, custo de negócio no holdout de teste).
+  - `POST /predict`: predição para um único cliente.
+  - `POST /predict/batch`: predição em lote (até 500 clientes por chamada),
+    processada de forma vetorizada (uma única passada pelo modelo).
+  - Validação de entrada via Pydantic (schemas em `schemas.py`); middleware
+    de latência (`X-Request-ID`, `X-Process-Time-Ms`); **CORS** habilitado
+    para consumo direto a partir de um frontend/navegador; tratamento de
+    erro dedicado quando o modelo não está disponível (HTTP 503) e handler
+    genérico para qualquer exceção não tratada (HTTP 500, sem expor
+    detalhes internos ao cliente — apenas no log estruturado).
 - **Logging estruturado** (`src/churn_prediction/logging_config.py`): todo
   log da aplicação (treino e API) é emitido em JSON — nenhum módulo de
   produção usa `print()`.
-- **15 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
+- **21 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
   exigidos: schema (pandera), smoke test e testes de API — todos passando,
-  com 74% de cobertura de linha no pacote `churn_prediction`.
+  com 77% de cobertura de linha no pacote `churn_prediction`.
 - **Makefile** com os targets `install`, `lint`, `test`, `test-cov`,
-  `train`, `run` e `clean`.
+  `train`, `run` e `clean`, com comando equivalente documentado para quem
+  não tiver `make` disponível (ex.: Windows sem WSL/Chocolatey).
 
 ### Validação de qualidade nesta etapa
 
 ```bash
 make lint   # ruff: All checks passed!
-make test   # 15 passed
+make test   # 21 passed
 ```
 
 ## Próximas etapas
