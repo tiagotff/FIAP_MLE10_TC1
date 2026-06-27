@@ -74,6 +74,23 @@ Definidas a partir da EDA (Etapa 1), dado o desbalanceamento de classes
 > confirmando sinal preditivo real nos dados — pré-requisito para avançar com
 > a rede neural na Etapa 2.
 
+### Resultados finais (Etapa 2 — holdout de teste, 4 modelos)
+
+| Modelo | AUC-ROC | PR-AUC | F1 | Recall | Acurácia |
+|---|---|---|---|---|---|
+| DummyClassifier | 0.516 | 0.272 | 0.290 | 0.291 | 0.622 |
+| Regressão Logística | 0.841 | 0.633 | 0.614 | 0.783 | 0.738 |
+| Random Forest | 0.839 | 0.650 | 0.625 | 0.714 | 0.772 |
+| **MLP (PyTorch)** | 0.842 | 0.637 | 0.623 | **0.802** | 0.742 |
+
+**Achado central da Etapa 2**: os três modelos "reais" performam de forma
+muito próxima em AUC-ROC (~0.84) — a complexidade adicional da MLP não se
+traduz em ganho estatístico expressivo neste dataset tabular de porte
+moderado (~7k registros). Porém, ao aplicar o framework de custo de negócio
+(Seção 6), a MLP se destaca por ter o **maior recall (80,2%)**, o que reduz
+o número de falsos negativos (clientes que cancelam sem serem identificados)
+— e isso pesa mais no custo de negócio do que pequenas variações de AUC.
+
 ## 7. Dados disponíveis
 
 - **Fonte**: [Telco Customer Churn Dataset (IBM)](https://github.com/IBM/telco-customer-churn-on-icp4d) — dataset público.
@@ -115,3 +132,29 @@ O modelo só avança para produção se superar consistentemente os baselines
 acima (Regressão Logística) nas métricas técnicas E no framework de custo de
 negócio — caso contrário, o ganho de complexidade da rede neural não se
 justifica.
+
+## 11. Aplicação do framework de custo (Etapa 2)
+
+O framework de custo definido na Seção 4 foi aplicado aos 4 modelos no mesmo
+holdout de teste (custo de campanha assumido: R$ 50,00; horizonte de receita:
+12 meses):
+
+| Modelo | Custo líquido (R$) | Leitura |
+|---|---|---|
+| DummyClassifier | +153.073,60 | Custo líquido positivo = perda de valor (não direciona campanhas de forma útil) |
+| Regressão Logística | −182.330,00 | Ganho líquido |
+| Random Forest | −130.438,00 | Ganho líquido, mas menor (recall mais baixo → mais FN caros) |
+| **MLP (PyTorch)** | **−192.946,00** | **Maior ganho líquido** entre os modelos avaliados |
+
+Uma análise de sensibilidade (variando o custo de campanha de R$ 10 a R$ 200)
+mostrou que o ranking de negócio (MLP > Regressão Logística > Random Forest)
+se mantém estável nessa faixa — um indício de robustez da conclusão, embora o
+framework ainda dependa de calibração com custos reais de campanha antes de
+uma decisão definitiva de produção.
+
+**Conclusão da Etapa 2**: apesar de AUC-ROC quase empatada entre os 3
+modelos "reais", a MLP é a candidata mais forte a seguir para a Etapa 3,
+dado o maior recall e o melhor resultado no framework de custo de negócio —
+sem perder de vista que a Regressão Logística continua sendo uma alternativa
+competitiva e mais simples/interpretável, relevante para a decisão final de
+arquitetura de deploy na Etapa 4.

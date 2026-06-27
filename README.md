@@ -39,8 +39,8 @@ reprodutibilidade, testes e documentação.
 | Etapa | Descrição | Status |
 |---|---|---|
 | **1** | Entendimento e Preparação (EDA, ML Canvas, Baselines, MLflow) | ✅ Concluída |
-| **2** | Modelagem com Redes Neurais (MLP em PyTorch) | ⏳ Próxima |
-| **3** | Engenharia e API (refatoração, FastAPI, testes) | ⏳ Pendente |
+| **2** | Modelagem com Redes Neurais (MLP em PyTorch) | ✅ Concluída |
+| **3** | Engenharia e API (refatoração, FastAPI, testes) | ⏳ Próxima |
 | **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | ⏳ Pendente |
 
 ## Estrutura do repositório
@@ -54,13 +54,18 @@ reprodutibilidade, testes e documentação.
 │   └── ml_canvas.md          # ML Canvas do projeto (Etapa 1)
 ├── models/                   # Artefatos de modelo treinados (não versionado)
 ├── notebooks/
-│   └── 01_eda_baselines.ipynb  # EDA completa + baselines (Etapa 1)
+│   ├── 01_eda_baselines.ipynb       # EDA completa + baselines (Etapa 1)
+│   └── 02_mlp_model_comparison.ipynb  # MLP, baseline de árvore e comparação (Etapa 2)
 ├── scripts/
-│   └── generate_eda_notebook.py  # Script que gera o notebook de forma reprodutível
+│   ├── generate_eda_notebook.py     # Gera o notebook da Etapa 1
+│   └── generate_mlp_notebook.py     # Gera o notebook da Etapa 2
 ├── src/
 │   └── churn_prediction/
 │       ├── __init__.py
-│       └── config.py         # Configuração central: seeds, paths, MLflow
+│       ├── config.py          # Configuração central: seeds, paths, MLflow
+│       ├── data.py            # Carga, tratamento de qualidade e splits
+│       ├── business_cost.py   # Framework de custo de negócio (FP vs FN)
+│       └── mlp_model.py       # Arquitetura MLP + treino com early stopping
 ├── tests/                    # Testes automatizados (a partir da Etapa 3)
 ├── .gitignore
 ├── pyproject.toml            # Single source of truth: deps, ruff, pytest
@@ -140,6 +145,31 @@ python scripts/generate_eda_notebook.py
 jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda_baselines.ipynb
 ```
 
+### Notebook de modelagem com MLP (Etapa 2)
+
+```bash
+jupyter notebook notebooks/02_mlp_model_comparison.ipynb
+```
+
+Esse notebook:
+
+1. Constrói e treina a MLP em PyTorch (arquitetura 64→32, ReLU, Dropout,
+   `BCEWithLogitsLoss` com `pos_weight`, Adam, early stopping).
+2. Adiciona um baseline de árvore (Random Forest), complementando o baseline
+   linear da Etapa 1.
+3. Compara 4 modelos (Dummy, Regressão Logística, Random Forest, MLP) no
+   mesmo holdout de teste, com 6 métricas.
+4. Aplica o framework de custo de negócio (FP vs. FN) e uma análise de
+   sensibilidade ao custo de campanha.
+5. Registra todos os experimentos e modelos (sklearn + PyTorch) no MLflow.
+
+Para regenerar:
+
+```bash
+python scripts/generate_mlp_notebook.py
+jupyter nbconvert --to notebook --execute --inplace notebooks/02_mlp_model_comparison.ipynb
+```
+
 ### Visualizar experimentos no MLflow
 
 ```bash
@@ -208,13 +238,45 @@ preditivo real nos dados — pré-requisito para a Etapa 2 (rede neural).
 ML Canvas completo (stakeholders, métricas de negócio, SLOs, riscos): ver
 [`docs/ml_canvas.md`](docs/ml_canvas.md).
 
+## Resultados da Etapa 2
+
+Modelagem completa documentada em [`notebooks/02_mlp_model_comparison.ipynb`](notebooks/02_mlp_model_comparison.ipynb).
+
+### Comparação de modelos (holdout de teste)
+
+| Modelo | AUC-ROC | PR-AUC | F1 | Recall | Acurácia |
+|---|---|---|---|---|---|
+| DummyClassifier | 0.516 | 0.272 | 0.290 | 0.291 | 0.622 |
+| Regressão Logística | 0.841 | 0.633 | 0.614 | 0.783 | 0.738 |
+| Random Forest | 0.839 | 0.650 | 0.625 | 0.714 | 0.772 |
+| **MLP (PyTorch)** | 0.842 | 0.637 | 0.623 | **0.802** | 0.742 |
+
+Os três modelos "reais" performam de forma muito próxima em AUC-ROC (~0.84)
+— a MLP não traz ganho estatístico expressivo sobre os baselines neste
+dataset tabular de porte moderado.
+
+### Framework de custo de negócio (FP vs. FN)
+
+| Modelo | Custo líquido (R$) |
+|---|---|
+| DummyClassifier | +153.073,60 (perda de valor) |
+| Regressão Logística | −182.330,00 (ganho) |
+| Random Forest | −130.438,00 (ganho, menor que os demais) |
+| **MLP (PyTorch)** | **−192.946,00 (maior ganho)** |
+
+A MLP se destaca no critério de negócio por ter o maior recall (80,2%),
+reduzindo o número de falsos negativos — clientes que cancelam sem serem
+identificados a tempo, o tipo de erro mais caro neste framework. Análise de
+sensibilidade ao custo de campanha (R$ 10–200) confirma que esse ranking é
+estável nessa faixa.
+
+Detalhes completos do framework de custo: ver [`docs/ml_canvas.md`](docs/ml_canvas.md#11-aplicação-do-framework-de-custo-etapa-2).
+
 ## Próximas etapas
 
-- **Etapa 2**: construção e treinamento da MLP em PyTorch, com early stopping;
-  comparação com os baselines usando ≥ 4 métricas; análise de trade-off de
-  custo (falso positivo vs. falso negativo).
-- **Etapa 3**: refatoração em módulos (`src/`), pipeline reprodutível, testes
-  (pytest, pandera), API FastAPI (`/predict`, `/health`), logging estruturado.
+- **Etapa 3**: refatoração em módulos (`src/`, parcialmente já iniciado),
+  pipeline reprodutível, testes (pytest, pandera), API FastAPI
+  (`/predict`, `/health`), logging estruturado.
 - **Etapa 4**: Model Card, plano de monitoramento, vídeo STAR e
   (opcional) deploy em nuvem.
 
