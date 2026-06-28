@@ -39,6 +39,7 @@ from fastapi.responses import JSONResponse
 from churn_prediction.inference import ModelNotLoadedError, predictor
 from churn_prediction.logging_config import get_logger
 from churn_prediction.metrics import observe_prediction, observe_request, render_latest_metrics
+from churn_prediction.model_registry import ensure_model_artifacts
 from churn_prediction.schemas import (
     BatchChurnPredictionRequest,
     BatchChurnPredictionResponse,
@@ -57,9 +58,17 @@ API_VERSION = "1.0.0"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001 - assinatura exigida pelo FastAPI
-    """Carrega o modelo uma única vez, na inicialização da aplicação."""
+    """Carrega o modelo uma única vez, na inicialização da aplicação.
+
+    Se a variável de ambiente MODEL_BUCKET estiver configurada (cenário de
+    deploy em nuvem), baixa os artefatos do Cloud Storage antes de
+    carregá-los — ver `model_registry.py`. Em desenvolvimento local, esse
+    passo é um no-op e os artefatos já existentes em models/ são usados
+    diretamente.
+    """
     logger.info("Iniciando API de inferência de churn")
     try:
+        ensure_model_artifacts()
         predictor.load()
     except FileNotFoundError as exc:
         # A API ainda sobe (permite que /health responda e /ready reporte o

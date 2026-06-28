@@ -1,0 +1,23 @@
+# Dependências mínimas para RUNTIME da API (não inclui notebooks, treino,
+# testes ou MLflow tracking — apenas o necessário para servir o modelo já
+# treinado via FastAPI).
+#
+# Mantido separado do pyproject.toml (que instala o ambiente de
+# desenvolvimento completo) para que a imagem Docker de produção seja a
+# menor possível — reduz tempo de build e cold-start no Cloud Run.
+#
+# NOTA: 'torch' está deliberadamente FORA deste arquivo. Ele é instalado
+# separadamente no Dockerfile, a partir do índice oficial CPU-only
+# (https://download.pytorch.org/whl/cpu) — instalá-lo aqui via PyPI padrão
+# traria a build com dependências CUDA (~1.5GB extras, inúteis sem GPU).
+
+fastapi>=0.111
+uvicorn[standard]>=0.29
+pydantic>=2.7
+prometheus-client>=0.20
+scikit-learn>=1.4
+scipy>=1.12  # dependência transitiva obrigatória do scikit-learn (scipy.sparse)
+joblib>=1.3
+pandas>=2.2
+numpy>=1.26
+google-cloud-storage>=2.16  # usado por model_registry.py para baixar artefatos do GCS (opcional em dev local)
