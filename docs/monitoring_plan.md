@@ -90,8 +90,9 @@ formal das métricas de qualidade (Seção 1.2) segue uma cadência diferida:
 3. Se `/health` ok mas `/ready` reporta `not_ready`: os artefatos do
    modelo (`models/*.pt`, `*.joblib`) não foram encontrados ou falharam
    ao carregar — verificar se o volume/storage onde os artefatos residem
-   está acessível; re-executar `make train` se os artefatos realmente
-   estiverem ausentes.
+   está acessível; re-executar o treino
+   (`PYTHONPATH=src python -m churn_prediction.train`) se os artefatos
+   realmente estiverem ausentes.
 4. Comunicar o stakeholder (time de Retenção/CRM) se o tempo de
    indisponibilidade for relevante, já que decisões de campanha podem
    depender do score atualizado.
@@ -122,8 +123,8 @@ formal das métricas de qualidade (Seção 1.2) segue uma cadência diferida:
    do modelo.
 3. Se confirmado data drift ou degradação genuína: iniciar re-treinamento
    com dados mais recentes, seguindo o mesmo pipeline reprodutível
-   (`make train`), e comparar a nova run contra a anterior no MLflow antes
-   de promover o modelo novo a produção.
+   (`python -m churn_prediction.train`), e comparar a nova run contra a
+   anterior no MLflow antes de promover o modelo novo a produção.
 4. Documentar a decisão (mesmo que seja "manter o modelo atual") e
    atualizar o [Model Card](model_card.md) com a data e o resultado da
    reavaliação.

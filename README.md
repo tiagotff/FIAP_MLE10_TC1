@@ -21,6 +21,7 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 - [Como executar](#como-executar)
 - [Troubleshooting](#troubleshooting)
 - [API de inferência](#api-de-inferência)
+- [Dashboard Streamlit](#dashboard-streamlit)
 - [Testes automatizados](#testes-automatizados)
 - [Dataset](#dataset)
 - [Resultados da Etapa 1](#resultados-da-etapa-1)
@@ -54,6 +55,8 @@ reprodutibilidade, testes e documentação.
 
 ```
 .
+├── app/
+│   └── streamlit_app.py         # Dashboard Streamlit (cliente visual da API)
 ├── data/
 │   ├── raw/                 # Dataset bruto (versionado: é pequeno e público)
 │   └── processed/            # Dados processados (não versionado)
@@ -68,7 +71,9 @@ reprodutibilidade, testes e documentação.
 │   └── 02_mlp_model_comparison.ipynb  # MLP, baseline de árvore e comparação (Etapa 2)
 ├── scripts/
 │   ├── generate_eda_notebook.py     # Gera o notebook da Etapa 1
-│   └── generate_mlp_notebook.py     # Gera o notebook da Etapa 2
+│   ├── generate_mlp_notebook.py     # Gera o notebook da Etapa 2
+│   ├── upload_model_to_gcs.sh       # Sobe os artefatos do modelo para o bucket GCS
+│   └── deploy_streamlit_to_cloud_run.sh  # Build + deploy do dashboard no Cloud Run
 ├── src/
 │   └── churn_prediction/
 │       ├── __init__.py
@@ -80,6 +85,7 @@ reprodutibilidade, testes e documentação.
 │       ├── train.py            # Script de treino do modelo de produção
 │       ├── schemas.py          # Schemas Pydantic (request/response da API)
 │       ├── inference.py        # Carrega artefatos e executa predições
+│       ├── model_registry.py   # Baixa artefatos do modelo via Cloud Storage (deploy)
 │       ├── logging_config.py   # Logging estruturado (JSON), sem print()
 │       ├── metrics.py          # Métricas operacionais (Prometheus) para /metrics
 │       └── api.py              # API FastAPI (/, /health, /ready, /infer, /metadata, /metrics)
@@ -88,9 +94,17 @@ reprodutibilidade, testes e documentação.
 │   ├── conftest.py             # Fixtures compartilhadas
 │   ├── test_schema.py          # Validação de schema (pandera)
 │   ├── test_smoke.py           # Smoke tests do pipeline/treino/inferência
-│   └── test_api.py             # Testes dos endpoints da API (FastAPI TestClient)
-├── Makefile                    # make install | lint | test | train | run
+│   ├── test_api.py             # Testes dos endpoints da API (FastAPI TestClient)
+│   ├── test_model_registry.py  # Testes do model registry (modo local e bucket via mock)
+│   └── test_streamlit_app.py   # Testes da lógica de integração do dashboard
+├── Dockerfile                  # Imagem de produção da API
+├── Dockerfile.streamlit        # Imagem de produção do dashboard Streamlit
+├── cloudbuild.streamlit.yaml   # Config explícita do Cloud Build para o dashboard
+├── requirements-api.txt        # Dependências mínimas de runtime da API
+├── requirements-app.txt        # Dependências mínimas de runtime do dashboard
+├── Makefile                    # Atalhos opcionais (Linux/macOS/WSL) — ver Setup do ambiente
 ├── .gitignore
+├── .dockerignore
 ├── pyproject.toml            # Single source of truth: deps, ruff, pytest
 └── README.md
 ```
@@ -176,28 +190,29 @@ Isso instala todas as dependências declaradas no `pyproject.toml`: PyTorch,
 Scikit-Learn, MLflow, FastAPI, Pydantic, Pandera, ferramentas de teste
 (`pytest`, `pytest-cov`) e lint (`ruff`).
 
-### Sobre o `make`
+### Comandos do projeto (com ou sem `make`)
 
-Este projeto usa um `Makefile` (`make install`, `make lint`, `make test`,
-`make train`, `make run`) como forma padronizada de rodar tarefas comuns.
+Todos os comandos abaixo funcionam em qualquer sistema, direto com
+`python`/`pip`/`pytest` — **é essa a forma recomendada e usada ao longo
+deste README.**
 
-- **Linux / macOS**: `make` já vem instalado nativamente.
-- **Windows**: `make` **não** vem por padrão no Git Bash/MINGW64. Duas opções:
-  1. **Sem instalar nada** — rode o comando equivalente direto (documentado
-     ao lado de cada `make <alvo>` na tabela abaixo e ao longo deste README).
-  2. **Instalar o `make`** — via [Chocolatey](https://chocolatey.org/):
-     `choco install make`, ou usando o WSL (Windows Subsystem for Linux),
-     que já inclui `make` nativamente.
+Para quem usa Linux, macOS, ou WSL no Windows, o projeto também inclui um
+`Makefile` com atalhos equivalentes (`make install`, `make lint`, etc.) —
+totalmente opcional. **No Windows (Git Bash/MINGW64/PowerShell/cmd), `make`
+não vem instalado por padrão**; use os comandos diretos da tabela abaixo,
+ou instale `make` via [Chocolatey](https://chocolatey.org/)
+(`choco install make`) ou WSL caso prefira os atalhos.
 
-| `make <alvo>` | Comando equivalente (sem `make`) |
-|---|---|
-| `make install` | `pip install -e ".[dev]"` |
-| `make lint` | `ruff check .` |
-| `make format` | `ruff check --fix .` |
-| `make test` | ver [Testes automatizados](#testes-automatizados) |
-| `make test-cov` | ver [Testes automatizados](#testes-automatizados) |
-| `make train` | ver [API de inferência](#api-de-inferência) |
-| `make run` | ver [API de inferência](#api-de-inferência) |
+| Tarefa | Comando direto (recomendado, qualquer SO) | Atalho `make` (Linux/macOS/WSL) |
+|---|---|---|
+| Instalar dependências | `pip install -e ".[dev]"` | `make install` |
+| Lint | `ruff check .` | `make lint` |
+| Formatar código | `ruff check --fix .` | `make format` |
+| Rodar testes | ver [Testes automatizados](#testes-automatizados) | `make test` |
+| Testes com cobertura | ver [Testes automatizados](#testes-automatizados) | `make test-cov` |
+| Treinar o modelo | ver [API de inferência](#api-de-inferência) | `make train` |
+| Rodar a API localmente | ver [API de inferência](#api-de-inferência) | `make run` |
+| Rodar o dashboard localmente | ver [Dashboard Streamlit](#dashboard-streamlit) | `make run-app` |
 
 ## Como executar
 
@@ -265,12 +280,6 @@ Depois acesse `http://localhost:5000` no navegador.
 ruff check .
 ```
 
-Ou, via Makefile:
-
-```bash
-make lint
-```
-
 ## Troubleshooting
 
 **`ImportError: cannot import name 'Traversable' from 'importlib.abc'` ao
@@ -307,25 +316,8 @@ Antes de iniciar a API, é necessário treinar o modelo e salvar os artefatos
 em `models/` (não versionados em git — apenas `model_metadata.json` é
 versionado, por ser pequeno e legível).
 
-Com `make` (Linux/macOS, ou Windows com `make` instalado):
-
-```bash
-make train
-```
-
-Sem `make`:
-
 <details open>
-<summary><b>🐧🍎 Linux / macOS (bash/zsh)</b></summary>
-
-```bash
-PYTHONPATH=src python -m churn_prediction.train
-```
-
-</details>
-
-<details open>
-<summary><b>🪟 Windows (Git Bash)</b></summary>
+<summary><b>🐧🍎 Linux / macOS (bash/zsh) / 🪟 Windows (Git Bash)</b></summary>
 
 ```bash
 PYTHONPATH=src python -m churn_prediction.train
@@ -359,14 +351,6 @@ Isso gera:
 - `models/model_metadata.json` — métricas, parâmetros e versão do modelo.
 
 ### 2. Iniciar a API
-
-Com `make`:
-
-```bash
-make run
-```
-
-Sem `make` (mesma lógica de `PYTHONPATH` do passo anterior, em qualquer SO):
 
 ```bash
 # Linux/macOS ou Windows (Git Bash):
@@ -544,16 +528,55 @@ curl -X POST http://127.0.0.1:8000/predict/batch \
   padrão — detalhes internos (stack trace, exceção original) nunca são
   expostos na resposta, apenas registrados no log estruturado.
 
-## Testes automatizados
+## Dashboard Streamlit
 
-Com `make`:
+Um cliente visual da API (`app/streamlit_app.py`), pensado para um usuário
+de negócio (time de Retenção/CRM) sem conhecimento técnico de APIs —
+nenhuma lógica de ML roda neste app; ele apenas envia requisições à API e
+exibe o resultado.
+
+### Executar localmente
+
+Com a API já rodando (Seção anterior) em outro terminal:
 
 ```bash
-make test       # roda a suíte completa
-make test-cov    # roda com relatório de cobertura
+# Linux/macOS ou Windows (Git Bash):
+CHURN_API_URL=http://127.0.0.1:8000 streamlit run app/streamlit_app.py
+
+# Windows (PowerShell):
+$env:CHURN_API_URL = "http://127.0.0.1:8000"
+streamlit run app/streamlit_app.py
+
+# Windows (cmd):
+set CHURN_API_URL=http://127.0.0.1:8000 && streamlit run app/streamlit_app.py
 ```
 
-Sem `make`:
+O dashboard abre em `http://localhost:8501`. Se `CHURN_API_URL` não for
+definida, o app tenta `http://127.0.0.1:8000` por padrão.
+
+### O que o dashboard oferece
+
+- **Sidebar**: status da API (`GET /ready`) e um resumo das métricas do
+  modelo em produção (`GET /metadata`) — AUC-ROC, recall, custo de
+  negócio líquido.
+- **Aba "Cliente único"**: formulário completo (espelha
+  `ChurnPredictionRequest`) para avaliar um cliente via `POST /infer`.
+- **Aba "Carteira (CSV)"**: upload de um CSV com até 500 clientes,
+  avaliados em uma única chamada a `POST /predict/batch`; mostra a
+  distribuição de risco, uma tabela ordenada por probabilidade de churn,
+  e permite baixar o resultado em CSV.
+
+### Deploy em nuvem
+
+O dashboard pode ser implantado no Cloud Run como um serviço independente
+da API (`Dockerfile.streamlit`), apontando para a URL pública da API já
+implantada:
+
+```bash
+./scripts/deploy_streamlit_to_cloud_run.sh SEU_PROJETO https://SUA-API.run.app
+```
+
+## Testes automatizados
 
 ```bash
 # Linux/macOS ou Windows (Git Bash):
@@ -566,17 +589,23 @@ $env:PYTHONPATH = "src"; python -m pytest tests/ -v
 set PYTHONPATH=src && python -m pytest tests/ -v
 ```
 
-A suíte cobre os 3 tipos de teste exigidos, com **26 testes** no total:
+Para incluir o relatório de cobertura, adicione
+`--cov=src/churn_prediction --cov-report=term-missing` ao final de
+qualquer um dos comandos acima.
+
+A suíte cobre os 3 tipos de teste exigidos, com **38 testes** no total:
 
 | Arquivo | Tipo | O que valida |
 |---|---|---|
 | `tests/test_schema.py` | Schema (pandera) | Domínio de valores categóricos, tipos, ausência de nulos no dataset bruto e pós-tratamento |
 | `tests/test_smoke.py` | Smoke test | Pipeline de dados, pré-processamento, treino reduzido da MLP e inferência executam de ponta a ponta sem erros |
 | `tests/test_api.py` | API (FastAPI TestClient) | `/`, `/health`, `/ready`, `/metadata`, `/metrics`, `/infer`, `/predict` (alias) e `/predict/batch` (válido, inválido, limite de 500), CORS, headers de latência, erro 500 genérico sem detalhes internos |
+| `tests/test_model_registry.py` | Unitário (mocks) | Download dos artefatos do modelo via Cloud Storage (modo bucket) e comportamento no-op em desenvolvimento local (sem `MODEL_BUCKET`) |
+| `tests/test_streamlit_app.py` | Unitário (mocks) | Resolução da URL da API, wrapper de chamadas HTTP do dashboard, e sincronização do schema do CSV de upload com `ChurnPredictionRequest` |
 
 Os testes de `test_smoke.py` e `test_api.py` que dependem do modelo treinado
-são automaticamente pulados (`pytest.skip`) se `make train` (ou o comando
-equivalente) ainda não tiver sido executado.
+são automaticamente pulados (`pytest.skip`) se o treino (Seção
+[API de inferência](#api-de-inferência)) ainda não tiver sido executado.
 
 ## Dataset
 
@@ -696,8 +725,8 @@ reprodutível, API de inferência e testes automatizados.
 ### Validação de qualidade nesta etapa
 
 ```bash
-make lint   # ruff: All checks passed!
-make test   # 26 passed
+ruff check .                              # All checks passed!
+PYTHONPATH=src python -m pytest tests/    # 38 passed
 ```
 
 ## Resultados da Etapa 4
@@ -780,7 +809,8 @@ gcloud projects create SEU_PROJETO --name="Churn Prediction"
 gcloud config set project SEU_PROJETO
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com storage.googleapis.com
 
-# 2. Criar bucket e subir o modelo treinado (após 'make train' local)
+# 2. Criar bucket e subir o modelo treinado
+#    (treine antes com: PYTHONPATH=src python -m churn_prediction.train)
 gcloud storage buckets create gs://SEU_BUCKET --location=us-central1
 ./scripts/upload_model_to_gcs.sh SEU_BUCKET
 
