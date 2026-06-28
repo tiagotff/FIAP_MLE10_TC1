@@ -1,6 +1,6 @@
 {
   "model_version": "1.0.0",
-  "trained_at": "2026-06-27T19:34:41.183262+00:00",
+  "trained_at": "2026-06-28T04:02:53.092250+00:00",
   "seed": 42,
   "architecture": {
     "hidden_sizes": [
