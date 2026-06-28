@@ -1,0 +1,40 @@
+# Não copiar nada do ambiente de desenvolvimento local para a imagem.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Não copiar dados, notebooks, docs, testes ou modelos — não são
+# necessários em runtime (o Dockerfile só usa COPY src/). Os artefatos do
+# modelo são baixados do Cloud Storage em runtime, ver model_registry.py.
+data/
+notebooks/
+scripts/
+tests/
+docs/
+models/
+mlruns/
+mlflow.db
+
+# Nunca copiar nenhuma credencial para dentro da imagem. O Dockerfile só
+# executa 'COPY src/' — nenhum .json (incluindo possíveis credenciais de
+# service account) é copiado por padrão.
+*.env
+.env.*
+*-key.json
+*service-account*.json
+credentials/
+secrets/
+
+# Git e arquivos de configuração de IDE.
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Documentação do projeto (não necessária na imagem da API).
+README.md
+Makefile

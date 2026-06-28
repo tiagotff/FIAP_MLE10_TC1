@@ -73,6 +73,19 @@ data/interim/*
 *.pem
 *.key
 
+# ===== Credenciais de nuvem (GCP/AWS/Azure) — NUNCA versionar =====
+# Chaves de service account do GCP, sempre terminam em .json e contêm
+# "private_key" — bloqueadas por padrão de nome e por extensão completa
+# em pastas de credenciais comuns.
+*-key.json
+*-credentials.json
+*service-account*.json
+gcp-key*.json
+.gcloud/
+credentials/
+secrets/
+*.credentials
+
 # ===== IDEs =====
 .vscode/
 .idea/
