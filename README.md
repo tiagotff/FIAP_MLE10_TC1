@@ -27,6 +27,7 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 - [Resultados da Etapa 2](#resultados-da-etapa-2)
 - [Resultados da Etapa 3](#resultados-da-etapa-3)
 - [Resultados da Etapa 4](#resultados-da-etapa-4)
+- [Deploy em nuvem (bônus)](#deploy-em-nuvem-bônus)
 - [Próximas etapas](#próximas-etapas)
 
 ---
@@ -723,10 +724,81 @@ de monitoramento.
   re-avaliação periódica (mensal, dado o atraso natural do rótulo de
   churn) e playbook de resposta para 4 cenários de incidente.
 
+## Deploy em nuvem (bônus)
+
+A API foi implantada em produção real no **Google Cloud Platform**, via
+**Cloud Run**, com o modelo carregado dinamicamente de um bucket do
+**Cloud Storage** (model registry — ver
+[arquitetura de deploy](docs/deployment_architecture.md)).
+
+> ⚠️ A URL abaixo pode não estar mais ativa após o período de avaliação,
+> já que o projeto GCP é de uso pessoal/educacional e pode ser desligado
+> para evitar custos. O endpoint foi validado e está documentado com
+> evidência de funcionamento (Seção abaixo).
+
+**Endpoint público**: `https://churn-api-855490327597.us-central1.run.app`
+
+### Componentes do deploy
+
+- **Imagem Docker** ([`Dockerfile`](Dockerfile)): build mínimo, sem
+  artefatos de modelo embutidos — apenas código-fonte (`src/`) e
+  dependências de runtime ([`requirements-api.txt`](requirements-api.txt)),
+  com PyTorch CPU-only instalado a partir do índice oficial (evita ~1.5GB
+  de dependências CUDA desnecessárias).
+- **Model registry** (`src/churn_prediction/model_registry.py`): a API
+  baixa `mlp_model.pt` e `preprocessor.joblib` de um bucket GCS na
+  inicialização, configurado via a variável de ambiente `MODEL_BUCKET` —
+  um novo modelo treinado pode ser promovido a produção apenas
+  atualizando o bucket (via [`scripts/upload_model_to_gcs.sh`](scripts/upload_model_to_gcs.sh)),
+  sem rebuild ou redeploy da imagem.
+- **Cloud Build**: builda e publica a imagem a partir do código-fonte.
+- **Cloud Run**: serviço serverless, escala a zero quando sem tráfego —
+  compatível com o free tier permanente do GCP para o volume esperado
+  deste projeto.
+
+### Evidência de funcionamento (todos os 8 endpoints testados em produção)
+
+```bash
+$ curl https://churn-api-855490327597.us-central1.run.app/ready
+{"status":"ready","model_loaded":true}
+
+$ curl -X POST https://churn-api-855490327597.us-central1.run.app/infer \
+  -H "Content-Type: application/json" -d '{...}'
+{"churn_probability":0.8032,"churn_prediction":true,"risk_level":"high","model_version":"1.0.0"}
+```
+
+`/metadata` e `/metrics` também foram validados — `/metrics` confirmou o
+tráfego real gerado durante os testes
+(`churn_api_requests_total`, latência por rota via histograma,
+`churn_predictions_total{risk_level="high"}`).
+
+### Reproduzindo o deploy
+
+```bash
+# 1. Criar projeto e habilitar APIs
+gcloud projects create SEU_PROJETO --name="Churn Prediction"
+gcloud config set project SEU_PROJETO
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com storage.googleapis.com
+
+# 2. Criar bucket e subir o modelo treinado (após 'make train' local)
+gcloud storage buckets create gs://SEU_BUCKET --location=us-central1
+./scripts/upload_model_to_gcs.sh SEU_BUCKET
+
+# 3. Build e deploy
+gcloud builds submit --tag gcr.io/SEU_PROJETO/churn-api
+gcloud run deploy churn-api \
+  --image gcr.io/SEU_PROJETO/churn-api \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars MODEL_BUCKET=SEU_BUCKET \
+  --memory 1Gi --cpu 1 --port 8080
+```
+
 ## Próximas etapas
 
-- **Etapa 4 (itens restantes)**: roteiro e gravação do vídeo STAR (5 min)
-  e avaliação de viabilidade de deploy opcional em nuvem (AWS/Azure/GCP).
+- **Etapa 4 (item restante)**: roteiro e gravação do vídeo STAR (5 min).
+  O deploy opcional em nuvem (bônus) já foi concluído — ver
+  [seção acima](#deploy-em-nuvem-bônus).
 
 ---
 

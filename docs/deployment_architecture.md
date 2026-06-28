@@ -126,3 +126,31 @@ desconectada do que foi implementado:
 - Avaliar a viabilidade de detecção de *data drift* automatizada
   (ver [plano de monitoramento](monitoring_plan.md)) antes de expandir o
   uso do modelo para decisões de maior impacto.
+
+## Validação em produção real (GCP)
+
+O componente de **API Real-time** desta arquitetura foi implantado e
+validado em um ambiente real de nuvem (Google Cloud Run), confirmando que
+o desenho proposto funciona na prática, não apenas no papel:
+
+- A API foi containerizada (`Dockerfile`) e implantada via Cloud Run,
+  servindo publicamente em `https://churn-api-855490327597.us-central1.run.app`.
+- Os artefatos do modelo foram desacoplados da imagem de deploy: o
+  `model_registry.py` baixa `mlp_model.pt` e `preprocessor.joblib` de um
+  bucket do Cloud Storage na inicialização (configurado via
+  `MODEL_BUCKET`), validando exatamente a separação entre "ciclo de vida
+  do treino" e "ciclo de vida do deploy de código" descrita na Seção
+  "Componentes da arquitetura" acima.
+- Todos os 8 endpoints (`/`, `/health`, `/ready`, `/infer`, `/predict`,
+  `/predict/batch`, `/metadata`, `/metrics`) responderam corretamente em
+  produção, incluindo a confirmação via `/metrics` (formato Prometheus)
+  de que o tráfego real estava sendo medido e contabilizado.
+- O componente de **Pipeline Batch** (chamando `/predict/batch`
+  periodicamente) permanece descrito nesta arquitetura como a próxima
+  peça a ser implementada operacionalmente (ex.: via Cloud Scheduler +
+  Cloud Functions no mesmo projeto GCP) — fora do escopo de validação
+  desta fase, mas tecnicamente direto de adicionar dado que o endpoint já
+  existe e está em produção.
+
+Detalhes completos do deploy (comandos `gcloud` usados, evidências de
+teste): ver [README.md](../README.md#deploy-em-nuvem-bônus).
