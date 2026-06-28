@@ -98,7 +98,7 @@ def test_inference_predictor_smoke(valid_prediction_payload):
     except FileNotFoundError:
         import pytest
 
-        pytest.skip("Artefatos do modelo não encontrados — execute 'make train' antes.")
+        pytest.skip("Artefatos do modelo não encontrados — execute 'python -m churn_prediction.train' antes (com PYTHONPATH=src).")
 
     request = ChurnPredictionRequest.model_validate(valid_prediction_payload)
     response = predictor.predict(request)

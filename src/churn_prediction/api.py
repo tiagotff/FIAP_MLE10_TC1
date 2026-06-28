@@ -218,7 +218,7 @@ async def metadata() -> MetadataResponse:
     if not predictor.is_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modelo indisponível. Verifique se o treino foi executado ('make train').",
+            detail="Modelo indisponível. Verifique se o treino foi executado (python -m churn_prediction.train).",
         )
 
     model_info = predictor.get_model_info()
@@ -263,7 +263,7 @@ async def infer(payload: ChurnPredictionRequest) -> ChurnPredictionResponse:
     if not predictor.is_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modelo indisponível. Verifique se o treino foi executado ('make train').",
+            detail="Modelo indisponível. Verifique se o treino foi executado (python -m churn_prediction.train).",
         )
 
     return _predict_and_track(payload)
@@ -292,7 +292,7 @@ async def predict_batch(payload: BatchChurnPredictionRequest) -> BatchChurnPredi
     if not predictor.is_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modelo indisponível. Verifique se o treino foi executado ('make train').",
+            detail="Modelo indisponível. Verifique se o treino foi executado (python -m churn_prediction.train).",
         )
 
     predictions = predictor.predict_batch(payload.customers)

@@ -12,8 +12,79 @@ MLflow e, nas etapas seguintes, servido via API FastAPI.
 
 ---
 
+## Quickstart
+
+Sequência única, do zero, para quem acabou de clonar o repositório e ainda
+não tem nenhum terminal aberto. Cada comando assume que você está na pasta
+raiz do projeto (`cd FIAP_MLE10_TC1`) e usa **Git Bash** (Linux/macOS:
+mesmos comandos; Windows PowerShell/cmd: ver variações na
+[Setup do ambiente](#setup-do-ambiente) e em cada seção linkada abaixo).
+
+> Você vai precisar de **2 terminais abertos ao mesmo tempo** mais adiante
+> (um para a API, outro para o dashboard) — abra o segundo terminal só
+> quando o passo indicar.
+
+**Terminal 1** — do clone até a API rodando:
+
+```bash
+# 1. Clonar e entrar na pasta
+git clone https://github.com/tiagotff/FIAP_MLE10_TC1.git
+cd FIAP_MLE10_TC1
+
+# 2. Criar e ativar o ambiente virtual (Python 3.10-3.12 — ver nota abaixo)
+py -3.12 -m venv .venv
+source .venv/Scripts/activate
+
+# 3. Instalar o projeto e todas as dependências
+pip install -e ".[dev]"
+
+# 4. Treinar o modelo (gera os artefatos em models/, leva poucos segundos)
+PYTHONPATH=src python -m churn_prediction.train
+
+# 5. (Opcional, mas recomendado) Confirmar que tudo está correto: 38 testes devem passar
+PYTHONPATH=src python -m pytest tests/ -v
+
+# 6. Subir a API — deixe este terminal aberto e rodando
+PYTHONPATH=src python -m uvicorn churn_prediction.api:app --host 127.0.0.1 --port 8000
+```
+
+Espere aparecer a linha `Uvicorn running on http://127.0.0.1:8000` antes de
+seguir — **não digite mais nada neste terminal**, ele precisa continuar
+rodando.
+
+**Terminal 2** — novo terminal, com a API do Terminal 1 ainda rodando:
+
+```bash
+# 1. Entrar na pasta e ativar o mesmo ambiente virtual
+cd FIAP_MLE10_TC1
+source .venv/Scripts/activate
+
+# 2. Confirmar que a API está respondendo (deve retornar model_loaded: true)
+curl http://127.0.0.1:8000/ready
+
+# 3. Subir o dashboard, apontando para a API do Terminal 1
+CHURN_API_URL=http://127.0.0.1:8000 streamlit run app/streamlit_app.py
+```
+
+Abra `http://localhost:8501` no navegador — a sidebar deve mostrar
+"✅ Modelo carregado e pronto" e você já pode usar as duas abas do
+dashboard (avaliar um cliente, ou pontuar uma carteira via CSV).
+
+> ⚠️ Se você não tiver Python 3.10-3.12 instalado, ou se `py -3.12` não
+> for reconhecido, veja [Setup do ambiente](#setup-do-ambiente) — instalar
+> a versão certa do Python é o único pré-requisito que pode exigir um
+> passo extra antes de começar.
+>
+> Quer testar sem subir nada localmente? Aponte o Terminal 2 direto para a
+> API já em produção (ver [Deploy em nuvem](#deploy-em-nuvem-bônus)):
+> `CHURN_API_URL=https://churn-api-855490327597.us-central1.run.app streamlit run app/streamlit_app.py`
+> — nesse caso, nem precisa do Terminal 1.
+
+---
+
 ## Sumário
 
+- [Quickstart](#quickstart)
 - [Contexto do problema](#contexto-do-problema)
 - [Status do projeto](#status-do-projeto)
 - [Estrutura do repositório](#estrutura-do-repositório)

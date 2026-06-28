@@ -28,12 +28,12 @@ def client():
 @pytest.fixture(autouse=True)
 def _skip_if_model_unavailable():
     """Pula os testes de /predict se os artefatos do modelo não existirem
-    (ex.: ambiente limpo de CI sem 'make train' executado antes).
+    (ex.: ambiente limpo de CI sem o treino executado antes).
     """
     from churn_prediction.inference import MODEL_PATH, PREPROCESSOR_PATH
 
     if not MODEL_PATH.exists() or not PREPROCESSOR_PATH.exists():
-        pytest.skip("Artefatos do modelo não encontrados — execute 'make train' antes.")
+        pytest.skip("Artefatos do modelo não encontrados — execute 'python -m churn_prediction.train' antes (com PYTHONPATH=src).")
 
 
 def test_root_endpoint_returns_api_info(client):
@@ -64,7 +64,7 @@ def test_health_endpoint_is_simple_liveness_check(client):
 
 def test_ready_endpoint_reports_model_loaded(client):
     """GET /ready deve reportar 'ready' e model_loaded=True quando o modelo
-    e o pipeline foram carregados com sucesso (pré-requisito: 'make train'
+    e o pipeline foram carregados com sucesso (pré-requisito: treino
     já executado — garantido pela fixture _skip_if_model_unavailable).
     """
     response = client.get("/ready")
