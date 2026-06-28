@@ -1,6 +1,6 @@
 # Tech Challenge 1 — Previsão de Churn com Pipeline Profissional End-to-End
 
-[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)]()
+[![Status](https://img.shields.io/badge/status-conclu%C3%ADdo-brightgreen)]()
 [![Etapa](https://img.shields.io/badge/etapa%20atual-4%20de%204-blue)]()
 
 Projeto da Fase 1 da Pós Tech (FIAP) — **MLE10 / Grupo Tech Challenge 1**.
@@ -120,7 +120,7 @@ reprodutibilidade, testes e documentação.
 | **1** | Entendimento e Preparação (EDA, ML Canvas, Baselines, MLflow) | ✅ Concluída |
 | **2** | Modelagem com Redes Neurais (MLP em PyTorch) | ✅ Concluída |
 | **3** | Engenharia e API (refatoração, FastAPI, testes) | ✅ Concluída |
-| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | 🔄 Em andamento |
+| **4** | Documentação e Entrega Final (Model Card, vídeo STAR) | ✅ Concluída |
 
 ## Estrutura do repositório
 
@@ -135,7 +135,8 @@ reprodutibilidade, testes e documentação.
 │   ├── ml_canvas.md             # ML Canvas do projeto (Etapa 1, atualizado nas Etapas 2/3)
 │   ├── model_card.md            # Model Card completo (Etapa 4)
 │   ├── deployment_architecture.md  # Arquitetura de deploy: batch + real-time (Etapa 4)
-│   └── monitoring_plan.md       # Plano de monitoramento: métricas, alertas, playbook (Etapa 4)
+│   ├── monitoring_plan.md       # Plano de monitoramento: métricas, alertas, playbook (Etapa 4)
+│   └── Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx  # Slides STAR (Etapa 4)
 ├── models/                   # Artefatos de modelo treinados (não versionado)
 ├── notebooks/
 │   ├── 01_eda_baselines.ipynb       # EDA completa + baselines (Etapa 1)
@@ -841,6 +842,12 @@ de monitoramento.
   modelo (via `/metadata`), thresholds de alerta, cadência de
   re-avaliação periódica (mensal, dado o atraso natural do rótulo de
   churn) e playbook de resposta para 4 cenários de incidente.
+- **[Apresentação STAR](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx)**:
+  slides completos cobrindo os 4 elementos do método STAR (Situation,
+  Task, Action, Result), incluindo o diagrama de arquitetura ponta a
+  ponta e os resultados quantitativos do projeto.
+
+> 🎥 **Vídeo (5 min, método STAR)**: gravação ainda pendente.
 
 ## Deploy em nuvem (bônus)
 
@@ -922,9 +929,11 @@ gcloud run deploy churn-api \
 
 ## Próximas etapas
 
-- **Etapa 4 (item restante)**: roteiro e gravação do vídeo STAR (5 min).
-  O deploy opcional em nuvem (bônus) já foi concluído — ver
-  [seção acima](#deploy-em-nuvem-bônus).
+- **Gravação do vídeo STAR (5 min)**: única pendência do projeto. Os
+  slides de apoio já estão finalizados
+  ([Apresentação STAR](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx)),
+  restando apenas a gravação seguindo esse roteiro. O deploy opcional em
+  nuvem (bônus) já foi concluído — ver [seção acima](#deploy-em-nuvem-bônus).
 
 ---
 
