@@ -34,6 +34,8 @@ dev = [
     "httpx>=0.27",
     "jupyter>=1.0",
     "ipykernel>=6.29",
+    "streamlit>=1.38",
+    "responses>=0.25",
 ]
 
 [build-system]

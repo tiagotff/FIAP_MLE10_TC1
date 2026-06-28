@@ -1,0 +1,10 @@
+# Dependências mínimas para o app Streamlit (app/streamlit_app.py).
+#
+# Este app é um cliente HTTP puro da API de inferência (não usa torch,
+# sklearn, pandas para ML — apenas para exibir/manipular tabelas na UI).
+# Mantido separado de requirements-api.txt porque os dois são deployados
+# como serviços independentes no Cloud Run.
+
+streamlit>=1.38
+pandas>=2.2
+requests>=2.31

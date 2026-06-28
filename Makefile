@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-cov train run clean
+.PHONY: help install lint format test test-cov train run run-app clean
 
 PYTHON := python3
 PYTHONPATH := src
@@ -26,6 +26,9 @@ train: ## Treina o modelo de produção (MLP) e salva os artefatos em models/
 
 run: ## Inicia a API de inferência localmente (http://127.0.0.1:8000)
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m uvicorn churn_prediction.api:app --host 127.0.0.1 --port 8000 --reload
+
+run-app: ## Inicia o dashboard Streamlit localmente (http://localhost:8501), consumindo a API local
+	CHURN_API_URL=http://127.0.0.1:8000 streamlit run app/streamlit_app.py
 
 clean: ## Remove caches e artefatos gerados (não remove models/ treinados)
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
