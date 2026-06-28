@@ -187,8 +187,15 @@ pip install -e ".[dev]"
 ```
 
 Isso instala todas as dependências declaradas no `pyproject.toml`: PyTorch,
-Scikit-Learn, MLflow, FastAPI, Pydantic, Pandera, ferramentas de teste
-(`pytest`, `pytest-cov`) e lint (`ruff`).
+Scikit-Learn, MLflow, FastAPI, Pydantic, Pandera, Prometheus client,
+Google Cloud Storage, Streamlit, ferramentas de teste (`pytest`,
+`pytest-cov`, `responses`) e lint (`ruff`).
+
+> 💡 Como o projeto é instalado em modo editável (`pip install -e`), o
+> pacote `churn_prediction` já fica importável globalmente no ambiente
+> virtual — o `PYTHONPATH=src` usado nos comandos deste README é
+> redundante após esse passo, mas é mantido explícito por clareza e como
+> rede de segurança (funciona mesmo se o passo de instalação for pulado).
 
 ### Comandos do projeto (com ou sem `make`)
 
@@ -302,6 +309,16 @@ E acesse `http://localhost:5001`.
 O Windows não inclui `make` nativamente. Use o comando equivalente sem
 `make` (documentado na tabela em [Setup do ambiente](#setup-do-ambiente)),
 ou instale `make` via `choco install make` (Chocolatey) ou WSL.
+
+**Dashboard Streamlit mostra "Não foi possível conectar à API".**
+A API precisa estar rodando **em um terminal separado, ao mesmo tempo**
+que o Streamlit — são dois processos independentes. Confirme com
+`curl http://127.0.0.1:8000/ready` em um terceiro terminal: se der erro de
+conexão, a API não está no ar. Veja
+[API de inferência](#api-de-inferência) para subir a API antes do
+dashboard, ou aponte `CHURN_API_URL` para a API já implantada em nuvem
+(ver [Deploy em nuvem](#deploy-em-nuvem-bônus)) para testar sem precisar
+rodar nada localmente.
 
 ## API de inferência
 
@@ -715,18 +732,19 @@ reprodutível, API de inferência e testes automatizados.
 - **Logging estruturado** (`src/churn_prediction/logging_config.py`): todo
   log da aplicação (treino e API) é emitido em JSON — nenhum módulo de
   produção usa `print()`.
-- **26 testes automatizados** (`tests/`), distribuídos entre os 3 tipos
-  exigidos: schema (pandera), smoke test e testes de API — todos passando,
-  com 78% de cobertura de linha no pacote `churn_prediction`.
+- **Testes automatizados** (`tests/`), distribuídos entre os 3 tipos
+  exigidos: schema (pandera), smoke test e testes de API — todos passando
+  (26 testes nesta etapa; a suíte completa do projeto, somando as etapas
+  seguintes, está em [Testes automatizados](#testes-automatizados)).
 - **Makefile** com os targets `install`, `lint`, `test`, `test-cov`,
-  `train`, `run` e `clean`, com comando equivalente documentado para quem
-  não tiver `make` disponível (ex.: Windows sem WSL/Chocolatey).
+  `train`, `run` e `clean` — atalhos opcionais, com o comando equivalente
+  documentado para quem não usa `make` (ex.: Windows sem WSL/Chocolatey).
 
 ### Validação de qualidade nesta etapa
 
 ```bash
 ruff check .                              # All checks passed!
-PYTHONPATH=src python -m pytest tests/    # 38 passed
+PYTHONPATH=src python -m pytest tests/    # 38 passed (suíte completa e atual do projeto)
 ```
 
 ## Resultados da Etapa 4
@@ -766,6 +784,10 @@ A API foi implantada em produção real no **Google Cloud Platform**, via
 > evidência de funcionamento (Seção abaixo).
 
 **Endpoint público**: `https://churn-api-855490327597.us-central1.run.app`
+
+**Documentação interativa (Swagger UI)**: `https://churn-api-855490327597.us-central1.run.app/docs`
+— permite testar qualquer endpoint (`/infer`, `/predict/batch`, etc.) direto
+no navegador, sem precisar de `curl` ou terminal.
 
 ### Componentes do deploy
 
@@ -814,7 +836,7 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com storage.goog
 gcloud storage buckets create gs://SEU_BUCKET --location=us-central1
 ./scripts/upload_model_to_gcs.sh SEU_BUCKET
 
-# 3. Build e deploy
+# 3. Build e deploy da API
 gcloud builds submit --tag gcr.io/SEU_PROJETO/churn-api
 gcloud run deploy churn-api \
   --image gcr.io/SEU_PROJETO/churn-api \
@@ -822,6 +844,9 @@ gcloud run deploy churn-api \
   --allow-unauthenticated \
   --set-env-vars MODEL_BUCKET=SEU_BUCKET \
   --memory 1Gi --cpu 1 --port 8080
+
+# 4. (Opcional) Build e deploy do dashboard Streamlit, apontando para a API acima
+./scripts/deploy_streamlit_to_cloud_run.sh SEU_PROJETO https://SUA-API.run.app
 ```
 
 ## Próximas etapas

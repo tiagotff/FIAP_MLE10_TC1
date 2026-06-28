@@ -151,6 +151,14 @@ o desenho proposto funciona na prática, não apenas no papel:
   Cloud Functions no mesmo projeto GCP) — fora do escopo de validação
   desta fase, mas tecnicamente direto de adicionar dado que o endpoint já
   existe e está em produção.
+- Um **dashboard Streamlit** (`app/streamlit_app.py`) foi construído como
+  cliente visual da API, oferecendo tanto a consulta pontual (aba
+  "Cliente único", via `/infer`) quanto a priorização de carteira (aba
+  "Carteira CSV", via `/predict/batch`) em uma interface única — uma
+  aproximação prática de como os dois modos de uso desta arquitetura
+  híbrida convergem para o mesmo usuário final (time de Retenção/CRM).
+  Possui infraestrutura de deploy própria (`Dockerfile.streamlit`),
+  independente da API.
 
 Detalhes completos do deploy (comandos `gcloud` usados, evidências de
 teste): ver [README.md](../README.md#deploy-em-nuvem-bônus).
