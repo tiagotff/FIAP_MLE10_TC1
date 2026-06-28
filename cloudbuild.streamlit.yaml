@@ -1,0 +1,23 @@
+# Configuração explícita do Cloud Build para o dashboard Streamlit.
+#
+# Necessário porque 'gcloud builds submit --tag' assume um arquivo chamado
+# exatamente 'Dockerfile' na raiz — este projeto tem dois Dockerfiles
+# (o da API e o do Streamlit), então o build do Streamlit precisa apontar
+# explicitamente para 'Dockerfile.streamlit' via este arquivo de config.
+#
+# Uso:
+#   gcloud builds submit --config cloudbuild.streamlit.yaml \
+#     --substitutions=_IMAGE=gcr.io/SEU_PROJETO/churn-streamlit
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "Dockerfile.streamlit"
+      - "-t"
+      - "${_IMAGE}"
+      - "."
+
+images:
+  - "${_IMAGE}"
