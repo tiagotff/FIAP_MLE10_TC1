@@ -100,7 +100,7 @@ dashboard (avaliar um cliente, ou pontuar uma carteira via CSV).
 - [Resultados da Etapa 3](#resultados-da-etapa-3)
 - [Resultados da Etapa 4](#resultados-da-etapa-4)
 - [Deploy em nuvem (bônus)](#deploy-em-nuvem-bônus)
-- [Próximas etapas](#próximas-etapas)
+- [Entrega final](#entrega-final)
 
 ---
 
@@ -136,7 +136,9 @@ reprodutibilidade, testes e documentação.
 │   ├── model_card.md            # Model Card completo (Etapa 4)
 │   ├── deployment_architecture.md  # Arquitetura de deploy: batch + real-time (Etapa 4)
 │   ├── monitoring_plan.md       # Plano de monitoramento: métricas, alertas, playbook (Etapa 4)
-│   └── Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx  # Slides STAR (Etapa 4)
+│   ├── Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx  # Slides STAR (Etapa 4)
+│   ├── Apresentacao_Tech_Challenge_1_MLE10_Churn.pdf   # Slides STAR, versão PDF
+│   └── video_apresentacao_STAR_TC1_MLE.mp4             # Vídeo de apresentação (5 min, STAR)
 ├── models/                   # Artefatos de modelo treinados (não versionado)
 ├── notebooks/
 │   ├── 01_eda_baselines.ipynb       # EDA completa + baselines (Etapa 1)
@@ -846,8 +848,9 @@ de monitoramento.
   slides completos cobrindo os 4 elementos do método STAR (Situation,
   Task, Action, Result), incluindo o diagrama de arquitetura ponta a
   ponta e os resultados quantitativos do projeto.
-
-> 🎥 **Vídeo (5 min, método STAR)**: gravação ainda pendente.
+- **[Vídeo de apresentação (5 min, método STAR)](docs/video_apresentacao_STAR_TC1_MLE.mp4)**:
+  gravação cobrindo os 4 elementos do método STAR, com demonstração da
+  API e do dashboard em produção.
 
 ## Deploy em nuvem (bônus)
 
@@ -927,13 +930,15 @@ gcloud run deploy churn-api \
 ./scripts/deploy_streamlit_to_cloud_run.sh SEU_PROJETO https://SUA-API.run.app
 ```
 
-## Próximas etapas
+## Entrega final
 
-- **Gravação do vídeo STAR (5 min)**: única pendência do projeto. Os
-  slides de apoio já estão finalizados
-  ([Apresentação STAR](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx)),
-  restando apenas a gravação seguindo esse roteiro. O deploy opcional em
-  nuvem (bônus) já foi concluído — ver [seção acima](#deploy-em-nuvem-bônus).
+Projeto concluído de ponta a ponta — todas as 4 etapas, incluindo o bônus
+de deploy em nuvem:
+
+- 🎥 **[Vídeo de apresentação (método STAR)](docs/video_apresentacao_STAR_TC1_MLE.mp4)**
+- 📊 **[Slides de apoio](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx)**
+  (também disponíveis em [PDF](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pdf))
+- ☁️ **API em produção**: ver [Deploy em nuvem](#deploy-em-nuvem-bônus)
 
 ---
 
