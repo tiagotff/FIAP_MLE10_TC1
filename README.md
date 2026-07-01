@@ -101,6 +101,7 @@ dashboard (avaliar um cliente, ou pontuar uma carteira via CSV).
 - [Resultados da Etapa 4](#resultados-da-etapa-4)
 - [Deploy em nuvem (bônus)](#deploy-em-nuvem-bônus)
 - [Entrega final](#entrega-final)
+- [Licença](#licença)
 
 ---
 
@@ -132,6 +133,7 @@ reprodutibilidade, testes e documentação.
 │   ├── raw/                 # Dataset bruto (versionado: é pequeno e público)
 │   └── processed/            # Dados processados (não versionado)
 ├── docs/
+│   ├── tech-challenge-fiap.pdf  # Enunciado oficial do desafio (material FIAP — ver Licença)
 │   ├── ml_canvas.md             # ML Canvas do projeto (Etapa 1, atualizado nas Etapas 2/3)
 │   ├── model_card.md            # Model Card completo (Etapa 4)
 │   ├── deployment_architecture.md  # Arquitetura de deploy: batch + real-time (Etapa 4)
@@ -179,6 +181,8 @@ reprodutibilidade, testes e documentação.
 ├── Makefile                    # Atalhos opcionais (Linux/macOS/WSL) — ver Setup do ambiente
 ├── .gitignore
 ├── .dockerignore
+├── LICENSE                    # Licença MIT (código e artefatos originais do projeto)
+├── NOTICE.md                  # Direitos autorais do material do desafio (FIAP)
 ├── pyproject.toml            # Single source of truth: deps, ruff, pytest
 └── README.md
 ```
@@ -939,6 +943,19 @@ de deploy em nuvem:
 - 📊 **[Slides de apoio](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pptx)**
   (também disponíveis em [PDF](docs/Apresentacao_Tech_Challenge_1_MLE10_Churn.pdf))
 - ☁️ **API em produção**: ver [Deploy em nuvem](#deploy-em-nuvem-bônus)
+
+---
+
+## Licença
+
+O código-fonte e a documentação autoral deste repositório estão licenciados
+sob a **Licença MIT** — ver [`LICENSE`](LICENSE).
+
+O enunciado oficial do desafio, disponível em
+[`docs/tech-challenge-fiap.pdf`](docs/tech-challenge-fiap.pdf), é de autoria
+da **FIAP / POS TECH** e **não está** coberto pela licença MIT acima —
+incluído apenas para fins de referência e contexto acadêmico. Detalhes em
+[`NOTICE.md`](NOTICE.md).
 
 ---
 
